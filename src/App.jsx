@@ -6,9 +6,11 @@ import {
   Clock, Users, UserCheck, UserX, Package, Award, X, Bell, CheckCircle,
   RefreshCw, Download, AlertTriangle, Menu
 } from 'lucide-react';
-import { Html5QrcodeScanner, Html5QrcodeScanType } from 'html5-qrcode';
+
 
 import { QrScanner } from '@yudiel/react-qr-scanner';
+
+
 
 
 // Firebase Configuration
@@ -57,17 +59,33 @@ const Notification = ({ type, message, onClose }) => {
 };
 
 
+
 const QRScanner = ({ onScanSuccess }) => {
   const [isScanning, setIsScanning] = useState(false);
-  const [hasPermission, setHasPermission] = useState(false);
   const [cameraError, setCameraError] = useState(null);
-  const [selectedCamera, setSelectedCamera] = useState('environment'); // 'environment' = cámara trasera
+  const [hasPermission, setHasPermission] = useState(false);
+  const [selectedCamera, setSelectedCamera] = useState('environment');
+
+  useEffect(() => {
+    const checkPermissions = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream.getTracks().forEach(track => track.stop());
+        setHasPermission(true);
+      } catch (err) {
+        setHasPermission(false);
+      }
+    };
+    checkPermissions();
+  }, []);
 
   const handleScan = (result) => {
-    if (result) {
+    if (result && result !== '') {
       console.log('QR detectado:', result);
       onScanSuccess(result);
-      // No detenemos automáticamente, solo procesamos
+      // Si quieres que siga escaneando, no hagas nada más
+      // Si quieres detener después de escanear, descomenta:
+      // stopScanner();
     }
   };
 
@@ -80,22 +98,10 @@ const QRScanner = ({ onScanSuccess }) => {
   const requestCameraPermission = async () => {
     try {
       setCameraError(null);
-
-      // Solicitar permiso de cámara directamente
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      });
-
-      // Detener el stream (solo queríamos el permiso)
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       stream.getTracks().forEach(track => track.stop());
-
       setHasPermission(true);
       startScanner();
-
     } catch (error) {
       console.error('Error de permisos:', error);
       setCameraError(getCameraErrorMessage(error));
@@ -156,13 +162,21 @@ const QRScanner = ({ onScanSuccess }) => {
                 onError={handleError}
                 constraints={{
                   facingMode: selectedCamera,
-                  width: { min: 640, ideal: 1280, max: 1920 },
-                  height: { min: 480, ideal: 720, max: 1080 }
                 }}
-                scanDelay={300}
-                className="w-full h-full object-cover"
-                viewFinderBorder={false}
-                hideCount={true}
+                scanDelay={500}
+                className="w-full h-full"
+                styles={{
+                  container: {
+                    width: '100%',
+                    height: '100%',
+                    position: 'relative',
+                  },
+                  video: {
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  },
+                }}
               />
             </div>
 
@@ -290,36 +304,9 @@ const QRScanner = ({ onScanSuccess }) => {
           </button>
         </div>
       </div>
-
-      {/* Estado y ayuda */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-md">
-        <div className={`p-4 rounded-2xl border-2 ${isScanning ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-3 h-3 rounded-full ${isScanning ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></div>
-            <span className="text-sm font-bold text-slate-700">
-              {isScanning ? 'Cámara activa' : 'Cámara inactiva'}
-            </span>
-          </div>
-          {isScanning && (
-            <p className="text-xs text-slate-500 mt-1">
-              Cámara: {selectedCamera === 'environment' ? 'Trasera' : 'Frontal'}
-            </p>
-          )}
-        </div>
-
-        <div className="p-4 rounded-2xl border-2 border-blue-200 bg-blue-50">
-          <div className="flex items-center gap-3">
-            <CheckCircle className="w-4 h-4 text-blue-600" />
-            <span className="text-xs font-bold text-blue-700">
-              Usando HTTPS (Vercel)
-            </span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
-
 const ProfileDrawer = ({ acampante, onClose, onCheckIn, onToggleKit }) => {
   const normalizeField = (value) => {
     if (!value || value.toString().trim() === "") return "NO";
