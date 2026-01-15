@@ -6,6 +6,8 @@ import {
   Clock, Users, UserCheck, UserX, Package, Award, X, Bell, CheckCircle,
   RefreshCw, Download, AlertTriangle, Menu
 } from 'lucide-react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
+
 
 // Firebase Configuration
 const firebaseConfig = {
@@ -52,68 +54,40 @@ const Notification = ({ type, message, onClose }) => {
   );
 };
 
-const QRScanner = ({ onScan }) => {
-  const [manualDni, setManualDni] = useState('');
+const QRScanner = ({ onScanSuccess }) => {
+  useEffect(() => {
+    // Usamos un ID único para el scanner
+    const scanner = new Html5QrcodeScanner("reader", {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0
+    });
+
+    scanner.render((decodedText) => {
+      // 1. Ejecutamos la búsqueda del acampante
+      onScanSuccess(decodedText);
+
+      // 2. Limpiamos el scanner para que no siga procesando
+      scanner.clear().catch(error => {
+        console.error("Error al limpiar el scanner:", error);
+      });
+    }, (error) => {
+      // Errores de lectura silenciosos (suceden mientras busca el QR)
+    });
+
+    return () => {
+      scanner.clear().catch(error => console.error("Limpieza en unmount:", error));
+    };
+  }, [onScanSuccess]);
 
   return (
-    <div className="flex flex-col items-center gap-8 p-8 max-w-2xl mx-auto">
-      <div className="w-full bg-white rounded-3xl border-2 border-slate-200 shadow-xl overflow-hidden">
-        <div className="bg-gradient-to-br from-emerald-50 to-white p-6 border-b border-slate-200">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-2xl font-black text-slate-900">Escáner de QR</h2>
-              <p className="text-sm text-slate-500 font-medium">Escanea el código del participante</p>
-            </div>
-            <div className="flex items-center gap-2 bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span className="text-xs font-bold">ACTIVA</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="relative aspect-video bg-slate-900 flex items-center justify-center overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/20 to-transparent"></div>
-          <div className="relative">
-            <div className="w-72 h-72 border-4 border-emerald-500/30 rounded-2xl relative">
-              <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-emerald-500 rounded-tl-2xl"></div>
-              <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-emerald-500 rounded-tr-2xl"></div>
-              <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-emerald-500 rounded-bl-2xl"></div>
-              <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-emerald-500 rounded-br-2xl"></div>
-              <QrCode className="w-24 h-24 text-emerald-500/40 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-              <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 shadow-[0_0_10px_#10b981] animate-scan"></div>
-            </div>
-          </div>
-        </div>
+    <div className="flex flex-col items-center justify-center space-y-4">
+      <div className="relative w-full max-w-md overflow-hidden rounded-3xl border-4 border-emerald-500 bg-black shadow-2xl">
+        <div id="reader"></div>
+        {/* Línea de escaneo estética */}
+        <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)] animate-scan z-10"></div>
       </div>
-
-      <div className="w-full max-w-md bg-white rounded-2xl border-2 border-slate-200 p-6 shadow-lg">
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Entrada Manual (Testing)</p>
-        <input
-          type="text"
-          placeholder="Ingresar DNI del participante"
-          value={manualDni}
-          onChange={(e) => setManualDni(e.target.value)}
-          onKeyPress={(e) => {
-            if (e.key === 'Enter' && manualDni.trim()) {
-              onScan(manualDni.trim());
-              setManualDni('');
-            }
-          }}
-          className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 mb-3"
-        />
-        <button
-          onClick={() => {
-            if (manualDni.trim()) {
-              onScan(manualDni.trim());
-              setManualDni('');
-            }
-          }}
-          className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-2"
-        >
-          <Search className="w-5 h-5" />
-          Buscar Acampante
-        </button>
-      </div>
+      <p className="text-slate-500 font-bold animate-pulse">Apuntá al código QR del acampante</p>
     </div>
   );
 };
@@ -762,6 +736,31 @@ export default function AvivaApp() {
     loadAcampantes();
   }, []);
 
+  const QRScanner = ({ onScanSuccess }) => {
+    useEffect(() => {
+      const scanner = new Html5QrcodeScanner("reader", {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+      });
+
+      scanner.render((decodedText) => {
+        // Cuando detecta el DNI, ejecuta la función de búsqueda
+        onScanSuccess(decodedText);
+        // Opcional: detener el scanner tras el éxito para procesar
+        scanner.clear();
+      }, (error) => {
+        // Errores de lectura silenciosos
+      });
+
+      return () => scanner.clear();
+    }, [onScanSuccess]);
+
+    return (
+      <div className="mx-auto w-full max-w-md overflow-hidden rounded-3xl border-4 border-orange-500 bg-black">
+        <div id="reader"></div>
+      </div>
+    );
+  };
   const loadAcampantes = async () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'acampantes'));
@@ -938,7 +937,7 @@ export default function AvivaApp() {
 
       <main className="p-6 pb-28">
         {activeTab === 'dashboard' && <Dashboard acampantes={acampantes} />}
-        {activeTab === 'scanner' && <QRScanner onScan={handleScan} />}
+        {activeTab === 'scanner' && <QRScanner onScanSuccess={handleScan} />}
         {activeTab === 'habitaciones' && (
           <HabitacionesMejoradas
             acampantes={acampantes}
