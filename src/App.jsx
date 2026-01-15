@@ -203,13 +203,40 @@ const QRScanner = ({ onScanSuccess }) => {
         </div>
       )}
 
-      {/* Contenedor del scanner */}
       <div className="relative w-full max-w-md overflow-hidden rounded-3xl border-4 border-emerald-500 bg-black shadow-2xl min-h-[400px]">
-        {/* Elemento donde se renderiza el scanner */}
+        {/* Elemento donde se renderiza el scanner - DEBE ESTAR SIEMPRE VISIBLE */}
         <div id="reader" className="w-full h-full"></div>
 
-        {!isScanning ? (
-          /* Pantalla de inicio - cuando no está escaneando */
+        {isScanning ? (
+          /* Solo mostramos una guía SUPERFICIAL que NO cubra toda la cámara */
+          <>
+            {/* Línea de escaneo animada */}
+            <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)] animate-scan z-10"></div>
+
+            {/* Guía de recuadro central - TRANSPARENTE */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="relative w-64 h-64">
+                {/* Esquinas decorativas */}
+                <div className="absolute -top-2 -left-2 w-8 h-8 border-t-4 border-l-4 border-emerald-400 rounded-tl-lg"></div>
+                <div className="absolute -top-2 -right-2 w-8 h-8 border-t-4 border-r-4 border-emerald-400 rounded-tr-lg"></div>
+                <div className="absolute -bottom-2 -left-2 w-8 h-8 border-b-4 border-l-4 border-emerald-400 rounded-bl-lg"></div>
+                <div className="absolute -bottom-2 -right-2 w-8 h-8 border-b-4 border-r-4 border-emerald-400 rounded-br-lg"></div>
+              </div>
+            </div>
+
+
+            {/* Instrucciones en la parte inferior - NO CUBRE LA CÁMARA */}
+            <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
+              <div className="inline-block bg-black/70 backdrop-blur-sm px-4 py-2 rounded-full">
+                <p className="text-white font-bold text-sm flex items-center justify-center gap-2">
+                  <QrCode className="w-4 h-4" />
+                  Apuntá al código QR
+                </p>
+              </div>
+            </div>
+          </>
+        ) : (
+          /* Pantalla de inicio - SOLO cuando no está escaneando */
           <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-900 to-black">
             <div className="text-center p-8">
               <div className="w-32 h-32 border-4 border-dashed border-slate-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
@@ -222,20 +249,6 @@ const QRScanner = ({ onScanSuccess }) => {
                   : 'Presiona "Solicitar Permiso" para acceder a la cámara'
                 }
               </p>
-            </div>
-          </div>
-        ) : (
-          /* Overlay de instrucciones cuando está escaneando */
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)] animate-scan z-10"></div>
-            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/40 to-transparent">
-              <div className="text-center p-6 bg-black/30 rounded-2xl backdrop-blur-sm border border-white/20">
-                <div className="w-20 h-20 border-2 border-white/30 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                  <QrCode className="w-12 h-12 text-white/70" />
-                </div>
-                <p className="text-white font-bold text-lg">Apuntá al código QR</p>
-                <p className="text-emerald-300 text-sm mt-1">La cámara está activa</p>
-              </div>
             </div>
           </div>
         )}
@@ -1225,6 +1238,23 @@ export default function AvivaApp() {
       )}
 
       <style>{`
+      /* En el <style> del componente AvivaApp */
+#reader {
+  width: 100% !important;
+  height: 100% !important;
+  position: relative !important;
+}
+
+#reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 20px !important;
+}
+
+#reader canvas {
+  display: none; /* Ocultar el canvas si es necesario */
+}
        @keyframes scan {
     0%, 100% { top: 0; }
     50% { top: calc(100% - 4px); }
