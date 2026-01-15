@@ -734,7 +734,7 @@ export default function AvivaApp() {
       });
 
     } catch (error) {
-      console.error('Error al actualizar habitación:', error);
+      console.error('Error al actualizar habitación ja:', error);
       setNotification({
         type: 'error',
         message: '✗ Error al actualizar habitación'
