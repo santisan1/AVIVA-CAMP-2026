@@ -4,8 +4,8 @@ import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp } fr
 import {
   Home, QrCode, Building2, Search, Calendar, User, Phone, AlertCircle,
   Clock, Users, UserCheck, UserX, Package, Award, X, Bell, CheckCircle,
-  RefreshCw, Download, AlertTriangle, Menu
-
+  RefreshCw, Download, AlertTriangle, Menu,
+  Plus, ChevronLeft, ChevronRight  // <-- Añade estos
 } from 'lucide-react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -635,38 +635,69 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, onUpdateHabitaci
   const [editingHabitacion, setEditingHabitacion] = useState(null);
   const [nuevaHabitacion, setNuevaHabitacion] = useState('');
   const [filtroGenero, setFiltroGenero] = useState('todos');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filtroPiso, setFiltroPiso] = useState('todos');
 
+  // Calcular estadísticas
+  const totalAcampantes = acampantes.length;
+  const presentes = acampantes.filter(a => a.presente).length;
+  const sinHabitacion = acampantes.filter(a => !a.habitacion || a.habitacion === 'Sin asignar');
+  const ocupacionTotal = totalAcampantes - sinHabitacion.length;
+  const porcentajeOcupacion = totalAcampantes > 0 ? Math.round((ocupacionTotal / totalAcampantes) * 100) : 0;
+
+  // Agrupar por habitación
   const habitaciones = {};
   acampantes.forEach(a => {
     const hab = a.habitacion || 'Sin asignar';
     if (!habitaciones[hab]) {
-      habitaciones[hab] = { hombres: [], mujeres: [], total: 0, presentes: 0 };
+      habitaciones[hab] = {
+        hombres: [],
+        mujeres: [],
+        total: 0,
+        presentes: 0,
+        tipo: 'Standard'
+      };
     }
     if (a.sexo === 'Hombre') habitaciones[hab].hombres.push(a);
     else if (a.sexo === 'Mujer') habitaciones[hab].mujeres.push(a);
     habitaciones[hab].total++;
     if (a.presente) habitaciones[hab].presentes++;
+
+    // Determinar tipo de habitación basado en el número
+    if (hab.includes('Suite') || hab.includes('suite')) habitaciones[hab].tipo = 'Deluxe Suite';
+    else if (hab.includes('Staff')) habitaciones[hab].tipo = 'Staff Suite';
   });
 
-  const filtrarHabitaciones = () => {
-    const filtradas = {};
-    Object.entries(habitaciones).forEach(([hab, datos]) => {
-      if (filtroGenero === 'todos') filtradas[hab] = datos;
-      else if (filtroGenero === 'hombre' && datos.hombres.length > 0) filtradas[hab] = datos;
-      else if (filtroGenero === 'mujer' && datos.mujeres.length > 0) filtradas[hab] = datos;
+  // Filtrar habitaciones
+  const habitacionesFiltradas = Object.entries(habitaciones)
+    .filter(([nombre, datos]) => {
+      if (filtroGenero === 'hombre' && datos.hombres.length === 0) return false;
+      if (filtroGenero === 'mujer' && datos.mujeres.length === 0) return false;
+      if (filtroPiso !== 'todos') {
+        if (filtroPiso === '1' && !nombre.startsWith('1')) return false;
+        if (filtroPiso === '2' && !nombre.startsWith('2')) return false;
+        if (filtroPiso === '3' && !nombre.startsWith('3')) return false;
+      }
+      if (searchTerm && !nombre.toLowerCase().includes(searchTerm.toLowerCase())) {
+        const nombresHuespedes = [...datos.hombres, ...datos.mujeres]
+          .some(a => a.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
+        if (!nombresHuespedes) return false;
+      }
+      return true;
     });
-    return filtradas;
-  };
 
-  const habitacionesFiltradas = filtrarHabitaciones();
-  const habitacionesOrdenadas = Object.entries(habitacionesFiltradas).sort(([, a], [, b]) => {
-    if (a.hombres.length > 0 && b.hombres.length === 0) return -1;
-    if (a.hombres.length === 0 && b.hombres.length > 0) return 1;
-    return 0;
+  // Ordenar habitaciones
+  const habitacionesOrdenadas = habitacionesFiltradas.sort(([a], [b]) => {
+    if (a === 'Sin asignar') return 1;
+    if (b === 'Sin asignar') return -1;
+    return a.localeCompare(b, undefined, { numeric: true });
   });
 
   const handleAsignarHabitacion = async (dni) => {
-    if (!nuevaHabitacion.trim()) return alert('Ingresa un número de habitación');
+    if (!nuevaHabitacion.trim()) {
+      alert('Ingresa un número de habitación');
+      return;
+    }
     try {
       await onUpdateHabitacion(dni, nuevaHabitacion);
       setEditingHabitacion(null);
@@ -676,15 +707,432 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, onUpdateHabitaci
     }
   };
 
-  const sinHabitacion = acampantes.filter(a => !a.habitacion || a.habitacion === 'Sin asignar');
+  const getInitials = (nombre) => {
+    return nombre
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   return (
-    <div>
-      {/* Tu contenido de habitaciones aquí */}
-      <h1>Habitaciones Mejoradas</h1>
-      {/* Agrega todo el JSX que necesites */}
+    <div className="space-y-6 pb-24 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-emerald-50 to-white p-6 rounded-3xl border-2 border-slate-200">
+        <h1 className="text-4xl font-black text-slate-900">Room Assignments</h1>
+        <p className="text-slate-600 font-semibold mt-2">Efficiently manage occupancy and logistics for camp participants</p>
+      </div>
+
+      {/* Barra de búsqueda */}
+      <div className="bg-white rounded-2xl p-4 border-2 border-slate-200 shadow-lg">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search rooms or guests..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 font-semibold"
+          />
+        </div>
+      </div>
+
+      {/* Estadísticas globales */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <Users className="w-5 h-5 text-emerald-600" />
+            <p className="text-slate-600 text-sm font-medium">Total Participants</p>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <p className="text-3xl font-black text-emerald-600">{totalAcampantes}</p>
+            <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+              {presentes} Presentes
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <Building2 className="w-5 h-5 text-blue-600" />
+            <p className="text-slate-600 text-sm font-medium">Rooms Occupied</p>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <p className="text-3xl font-black text-blue-600">
+              {Object.keys(habitaciones).filter(h => h !== 'Sin asignar').length}
+            </p>
+            <span className="text-xs text-slate-500 font-bold">habilitadas</span>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl p-6 border-2 border-orange-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="w-5 h-5 text-orange-600" />
+            <p className="text-slate-600 text-sm font-medium">Unassigned Guests</p>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <p className="text-3xl font-black text-orange-600">{sinHabitacion.length}</p>
+            <span className="text-xs font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+              Needs assignment
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Barra de progreso y filtros */}
+      <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 shadow-lg">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex-1 max-w-md">
+            <div className="flex justify-between mb-2">
+              <p className="text-slate-900 text-sm font-bold">Overall Occupancy</p>
+              <p className="text-emerald-600 text-sm font-black">
+                {ocupacionTotal} / {totalAcampantes}
+              </p>
+            </div>
+            <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 transition-all duration-300"
+                style={{ width: `${porcentajeOcupacion}%` }}
+              />
+            </div>
+            <p className="text-slate-400 text-xs mt-1 font-semibold uppercase tracking-wider">
+              {porcentajeOcupacion}% of capacity reached
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setFiltroGenero('todos')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${filtroGenero === 'todos'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+            >
+              All Genders
+            </button>
+            <button
+              onClick={() => setFiltroGenero('hombre')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${filtroGenero === 'hombre'
+                ? 'bg-blue-600 text-white'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+            >
+              Men Only
+            </button>
+            <button
+              onClick={() => setFiltroGenero('mujer')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${filtroGenero === 'mujer'
+                ? 'bg-pink-600 text-white'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+            >
+              Women Only
+            </button>
+
+            <div className="w-px h-6 bg-slate-300 mx-1" />
+
+            <button
+              onClick={() => setFiltroPiso('todos')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${filtroPiso === 'todos'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+            >
+              All Floors
+            </button>
+            {['1', '2', '3'].map(piso => (
+              <button
+                key={piso}
+                onClick={() => setFiltroPiso(piso)}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${filtroPiso === piso
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+              >
+                Floor {piso}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Grid de habitaciones */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {habitacionesOrdenadas.map(([nombre, datos]) => {
+          const isSinAsignar = nombre === 'Sin asignar';
+          const isFull = datos.total >= 4; // Asumimos 4 camas por habitación
+          const isEmpty = datos.total === 0;
+          const totalHuespedes = datos.hombres.length + datos.mujeres.length;
+
+          return (
+            <div
+              key={nombre}
+              className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden flex flex-col group transition-all ${isSinAsignar
+                ? 'border-orange-300'
+                : isFull
+                  ? 'border-emerald-300'
+                  : isEmpty
+                    ? 'border-slate-300'
+                    : 'border-blue-300 hover:border-blue-500'
+                }`}
+            >
+              {/* Header de la habitación */}
+              <div className={`p-5 border-b-2 flex justify-between items-start ${isSinAsignar
+                ? 'bg-orange-50 border-orange-200'
+                : isFull
+                  ? 'bg-emerald-50 border-emerald-200'
+                  : isEmpty
+                    ? 'bg-slate-50 border-slate-200'
+                    : 'bg-blue-50 border-blue-200'
+                }`}>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">
+                    {isSinAsignar ? 'Unassigned Guests' : `Room ${nombre}`}
+                  </h3>
+                  <p className="text-xs font-bold text-emerald-600 uppercase tracking-tight mt-1">
+                    {datos.tipo} • {nombre.startsWith('1') ? 'Ground Floor' :
+                      nombre.startsWith('2') ? 'Floor 1' :
+                        nombre.startsWith('3') ? 'Floor 2' : 'Various'}
+                  </p>
+                </div>
+
+                <div className="flex flex-col items-end">
+                  {!isSinAsignar && !isEmpty && (
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-black mb-1 ${isFull
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-blue-100 text-blue-700'
+                      }`}>
+                      {totalHuespedes}/4 BEDS
+                    </span>
+                  )}
+
+                  {isSinAsignar && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">
+                        {datos.total} GUESTS
+                      </span>
+                    </div>
+                  )}
+
+                  {!isSinAsignar && totalHuespedes > 0 && (
+                    <div className="flex -space-x-2">
+                      {[...datos.hombres, ...datos.mujeres]
+                        .slice(0, 3)
+                        .map((acampante, idx) => (
+                          <div
+                            key={idx}
+                            className="w-6 h-6 rounded-full border-2 border-white bg-slate-300 flex items-center justify-center text-xs font-bold text-slate-700"
+                          >
+                            {getInitials(acampante.nombre)}
+                          </div>
+                        ))}
+                      {totalHuespedes > 3 && (
+                        <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600">
+                          +{totalHuespedes - 3}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Lista de huéspedes */}
+              <div className="p-5 flex-1 space-y-3">
+                {isSinAsignar ? (
+                  <div className="space-y-3">
+                    {datos.hombres.concat(datos.mujeres).slice(0, 4).map((acampante, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => onSelectAcampante(acampante)}
+                        className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-700 font-bold">
+                            {getInitials(acampante.nombre)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">{acampante.nombre}</p>
+                            <p className="text-[10px] text-slate-500 font-semibold">
+                              {acampante.sexo?.toUpperCase()} • {acampante.edad} años
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingHabitacion(acampante.dni);
+                          }}
+                          className="text-orange-600 hover:text-orange-700"
+                        >
+                          <Building2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ))}
+                    {datos.total > 4 && (
+                      <div className="text-center pt-2 border-t border-slate-200">
+                        <p className="text-xs text-slate-500 font-semibold">
+                          And {datos.total - 4} more unassigned guests...
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : isEmpty ? (
+                  <div className="flex flex-col items-center justify-center py-8 space-y-3 opacity-60">
+                    <Building2 className="w-12 h-12 text-slate-400" />
+                    <p className="text-sm font-bold text-center text-slate-500">
+                      No guests assigned yet
+                    </p>
+                    <button className="mt-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors">
+                      Quick Assign
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {datos.hombres.concat(datos.mujeres).map((acampante, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => onSelectAcampante(acampante)}
+                        className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold ${acampante.presente
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-slate-100 text-slate-700'
+                            }`}>
+                            {getInitials(acampante.nombre)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">{acampante.nombre}</p>
+                            <p className="text-[10px] text-slate-500 font-semibold">
+                              {acampante.sexo?.toUpperCase()} • {acampante.edad} años
+                              {acampante.presente && ' • ✓ Presente'}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingHabitacion(acampante.dni);
+                          }}
+                          className="text-slate-400 hover:text-emerald-600 opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <Building2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ))}
+
+                    {!isFull && totalHuespedes < 4 && (
+                      <div className="pt-2">
+                        <button className="w-full border-2 border-dashed border-slate-300 rounded-lg py-2 text-slate-400 text-xs font-bold hover:border-emerald-500 hover:text-emerald-500 transition-all flex items-center justify-center gap-2">
+                          <Plus className="w-4 h-4" />
+                          Add Guest
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer de la habitación */}
+              <div className="p-3 bg-slate-50 flex gap-2 border-t border-slate-200">
+                <button className="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-700 hover:border-emerald-500 transition-colors">
+                  Edit Room
+                </button>
+                <button className="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-700 hover:border-emerald-500 transition-colors">
+                  View Logs
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Botón flotante para asignar */}
+      {editingHabitacion && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-black text-slate-900 mb-2">Assign Room</h3>
+            <p className="text-slate-600 text-sm mb-4">
+              Enter the room number for this guest
+            </p>
+            <div className="space-y-4">
+              <input
+                type="text"
+                value={nuevaHabitacion}
+                onChange={(e) => setNuevaHabitacion(e.target.value)}
+                placeholder="e.g., 101, 202, Suite-1"
+                className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-emerald-500 font-semibold"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                {['101', '102', '201', '202', '301', 'Suite'].map(room => (
+                  <button
+                    key={room}
+                    onClick={() => setNuevaHabitacion(room)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-semibold transition-colors"
+                  >
+                    {room}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setEditingHabitacion(null);
+                    setNuevaHabitacion('');
+                  }}
+                  className="flex-1 px-4 py-3 border-2 border-slate-300 rounded-xl text-slate-700 font-bold hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleAsignarHabitacion(editingHabitacion)}
+                  className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors"
+                >
+                  Assign Room
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Footer / Pagination */}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 py-6 border-t border-slate-200">
+        <p className="text-slate-500 text-sm font-bold">
+          Showing {habitacionesOrdenadas.length} of {Object.keys(habitaciones).length} rooms
+        </p>
+        <div className="flex items-center gap-2">
+          <button className="w-10 h-10 rounded-lg border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <button className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
+            1
+          </button>
+          <button className="w-10 h-10 rounded-lg border border-slate-300 flex items-center justify-center text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors">
+            2
+          </button>
+          <button className="w-10 h-10 rounded-lg border border-slate-300 flex items-center justify-center text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors">
+            3
+          </button>
+          <button className="w-10 h-10 rounded-lg border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors">
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Botón flotante de acción rápida */}
+      <div className="fixed bottom-8 right-8">
+        <button className="w-14 h-14 bg-emerald-600 text-white rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition-transform group relative">
+          <Plus className="w-7 h-7" />
+          <span className="absolute right-full mr-4 bg-slate-900 text-white text-xs px-3 py-1.5 rounded-lg font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+            QUICK ASSIGN
+          </span>
+        </button>
+      </div>
     </div>
-  )
-}
+  );
+};
 const SearchView = ({ acampantes, onSelectAcampante }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
