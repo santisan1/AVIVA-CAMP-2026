@@ -1151,7 +1151,7 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante }) => {
                           <span className="text-xs text-slate-500 font-semibold">DNI: {acampante.dni}</span>
                           <span className="text-xs text-slate-300">•</span>
                           <span className="text-xs text-slate-500 font-semibold">
-                            {acampante.sexo === 'Hombre' ? 'MALE' : 'FEMALE'}
+                            {acampante.sexo === 'Masculino' ? 'MALE' : 'FEMALE'}
                           </span>
                         </div>
                       </div>
