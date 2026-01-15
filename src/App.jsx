@@ -55,39 +55,83 @@ const Notification = ({ type, message, onClose }) => {
 };
 
 const QRScanner = ({ onScanSuccess }) => {
-  useEffect(() => {
-    // Usamos un ID único para el scanner
-    const scanner = new Html5QrcodeScanner("reader", {
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanner, setScanner] = useState(null);
+
+  const startScanner = () => {
+    // Si ya hay un escáner activo, no hacer nada
+    if (scanner) return;
+
+    const newScanner = new Html5QrcodeScanner("reader", {
       fps: 10,
       qrbox: { width: 250, height: 250 },
       aspectRatio: 1.0
     });
 
-    scanner.render((decodedText) => {
-      // 1. Ejecutamos la búsqueda del acampante
-      onScanSuccess(decodedText);
+    newScanner.render(
+      (decodedText) => {
+        // Detener el escáner después de un escaneo exitoso
+        stopScanner();
+        onScanSuccess(decodedText);
+      },
+      (error) => {
+        // Puedes manejar errores aquí si lo deseas
+      }
+    );
 
-      // 2. Limpiamos el scanner para que no siga procesando
-      scanner.clear().catch(error => {
-        console.error("Error al limpiar el scanner:", error);
-      });
-    }, (error) => {
-      // Errores de lectura silenciosos (suceden mientras busca el QR)
-    });
+    setScanner(newScanner);
+    setIsScanning(true);
+  };
 
+  const stopScanner = () => {
+    if (scanner) {
+      scanner.clear().catch(error => console.error("Error al detener el escáner:", error));
+      setScanner(null);
+      setIsScanning(false);
+    }
+  };
+
+  // Efecto para limpiar al desmontar
+  useEffect(() => {
     return () => {
-      scanner.clear().catch(error => console.error("Limpieza en unmount:", error));
+      if (scanner) {
+        scanner.clear().catch(error => console.error("Error al limpiar el escáner:", error));
+      }
     };
-  }, [onScanSuccess]);
+  }, [scanner]);
 
   return (
     <div className="flex flex-col items-center justify-center space-y-4">
       <div className="relative w-full max-w-md overflow-hidden rounded-3xl border-4 border-emerald-500 bg-black shadow-2xl">
         <div id="reader"></div>
-        {/* Línea de escaneo estética */}
-        <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)] animate-scan z-10"></div>
+        {isScanning && (
+          <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)] animate-scan z-10"></div>
+        )}
       </div>
-      <p className="text-slate-500 font-bold animate-pulse">Apuntá al código QR del acampante</p>
+
+      <div className="flex gap-4">
+        {!isScanning ? (
+          <button
+            onClick={startScanner}
+            className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg"
+          >
+            <QrCode className="w-5 h-5" />
+            Iniciar Escáner
+          </button>
+        ) : (
+          <button
+            onClick={stopScanner}
+            className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-2xl font-bold hover:bg-red-700 transition-all shadow-lg"
+          >
+            <X className="w-5 h-5" />
+            Detener Escáner
+          </button>
+        )}
+      </div>
+
+      <p className="text-slate-500 font-bold">
+        {isScanning ? "Apuntá al código QR del acampante" : "Haz clic en 'Iniciar Escáner' para comenzar"}
+      </p>
     </div>
   );
 };
