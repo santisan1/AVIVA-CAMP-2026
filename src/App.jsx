@@ -1056,7 +1056,7 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante }) => {
                               <p className="text-sm font-bold text-slate-900">{acampante.nombre}</p>
                               <div className="flex items-center gap-2">
                                 <span className="text-[10px] text-slate-500 font-semibold">
-                                  {acampante.sexo === 'Hombre' ? 'MALE' : 'FEMALE'}
+                                  {acampante.sexo === 'Masculino' ? 'MALE' : 'FEMALE'}
                                 </span>
                                 <span className="text-[10px] text-slate-300">•</span>
                                 <span className="text-[10px] text-slate-500 font-semibold">
@@ -1468,7 +1468,7 @@ const UnassignedModal = ({ acampantes, habitaciones, onSelectAcampante, onAssign
 
                     {!isCompatible && selectedAcampante && (
                       <span className="text-xs font-bold text-red-600">
-                        Gender mismatch
+                        No coincide género
                       </span>
                     )}
 
