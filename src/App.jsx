@@ -427,7 +427,7 @@ const Dashboard = ({ acampantes }) => {
   return (
     <div className="space-y-8 pb-24 max-w-7xl mx-auto">
       <div className="bg-gradient-to-br from-emerald-50 to-white p-6 rounded-3xl border-2 border-slate-200">
-        <h1 className="text-4xl font-black text-slate-900">AVIVA CAMP 2026</h1>
+        <h1 className="text-4xl font-black text-slate-900">AVIVA CAMP 2026 anashe</h1>
         <p className="text-slate-600 font-semibold mt-2">Panel de Recepción y Control</p>
       </div>
 
