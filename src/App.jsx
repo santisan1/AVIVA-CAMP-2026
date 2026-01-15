@@ -1423,8 +1423,8 @@ const UnassignedModal = ({ acampantes, habitaciones, onSelectAcampante, onAssign
               {habitaciones.map(room => {
                 const availableBeds = room.capacidad - room.ocupantes.length;
                 const isCompatible = !selectedAcampante ||
-                  room.genero === 'mixta' ||
-                  room.genero === (selectedAcampante.sexo === 'Hombre' ? 'hombre' : 'mujer');
+                  room.genero == 'mixta' ||
+                  room.genero == (selectedAcampante.sexo === 'Masculino' ? 'hombre' : 'mujer');
 
                 return (
                   <div
