@@ -58,10 +58,19 @@ const QRScanner = ({ onScanSuccess }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [scanner, setScanner] = useState(null);
 
-  const startScanner = () => {
-    // Si ya hay un escáner activo, no hacer nada
-    if (scanner) return;
+  useEffect(() => {
+    // Limpiar al desmontar
+    return () => {
+      if (scanner) {
+        scanner.clear().catch(error => console.error("Error al limpiar:", error));
+      }
+    };
+  }, [scanner]);
 
+  const startScanner = () => {
+    if (isScanning) return;
+
+    // Crear nuevo scanner
     const newScanner = new Html5QrcodeScanner("reader", {
       fps: 10,
       qrbox: { width: 250, height: 250 },
@@ -70,12 +79,12 @@ const QRScanner = ({ onScanSuccess }) => {
 
     newScanner.render(
       (decodedText) => {
-        // Detener el escáner después de un escaneo exitoso
-        stopScanner();
+        // Ejecutar callback y detener scanner
         onScanSuccess(decodedText);
+        stopScanner();
       },
       (error) => {
-        // Puedes manejar errores aquí si lo deseas
+        console.debug("Error de lectura:", error);
       }
     );
 
@@ -85,53 +94,122 @@ const QRScanner = ({ onScanSuccess }) => {
 
   const stopScanner = () => {
     if (scanner) {
-      scanner.clear().catch(error => console.error("Error al detener el escáner:", error));
+      scanner.clear().catch(error => console.error("Error al detener:", error));
       setScanner(null);
-      setIsScanning(false);
     }
+    setIsScanning(false);
   };
 
-  // Efecto para limpiar al desmontar
-  useEffect(() => {
-    return () => {
-      if (scanner) {
-        scanner.clear().catch(error => console.error("Error al limpiar el escáner:", error));
-      }
-    };
-  }, [scanner]);
-
   return (
-    <div className="flex flex-col items-center justify-center space-y-4">
+    <div className="flex flex-col items-center justify-center space-y-6">
+      <div className="bg-gradient-to-br from-emerald-50 to-white p-6 rounded-3xl border-2 border-slate-200 w-full max-w-md">
+        <h2 className="text-2xl font-black text-slate-900 mb-2">Escanear QR</h2>
+        <p className="text-slate-600 font-semibold">Escanea el DNI del participante</p>
+      </div>
+
       <div className="relative w-full max-w-md overflow-hidden rounded-3xl border-4 border-emerald-500 bg-black shadow-2xl">
         <div id="reader"></div>
-        {isScanning && (
-          <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)] animate-scan z-10"></div>
+
+        {isScanning ? (
+          <>
+            {/* Línea de escaneo animada */}
+            <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)] animate-scan z-10"></div>
+
+            {/* Overlay de instrucciones */}
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+              <div className="text-center p-6 bg-white/10 rounded-2xl backdrop-blur-md">
+                <QrCode className="w-16 h-16 text-white mx-auto mb-3" />
+                <p className="text-white font-bold text-lg">Apuntá al código QR</p>
+                <p className="text-emerald-200 text-sm mt-1">La cámara está activa</p>
+              </div>
+            </div>
+          </>
+        ) : (
+          /* Pantalla de inicio - cuando no está escaneando */
+          <div className="aspect-square flex items-center justify-center bg-gradient-to-br from-slate-900 to-black">
+            <div className="text-center p-8">
+              <div className="w-32 h-32 border-4 border-dashed border-slate-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <QrCode className="w-20 h-20 text-slate-500" />
+              </div>
+              <p className="text-slate-300 font-bold text-lg">Listo para escanear</p>
+              <p className="text-slate-400 text-sm mt-2">Presiona "Iniciar Cámara" para comenzar</p>
+            </div>
+          </div>
         )}
       </div>
 
-      <div className="flex gap-4">
+      {/* Controles del scanner */}
+      <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
         {!isScanning ? (
           <button
             onClick={startScanner}
-            className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg"
+            className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-3"
           >
-            <QrCode className="w-5 h-5" />
-            Iniciar Escáner
+            <QrCode className="w-6 h-6" />
+            <span>Iniciar Cámara</span>
           </button>
         ) : (
-          <button
-            onClick={stopScanner}
-            className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-2xl font-bold hover:bg-red-700 transition-all shadow-lg"
-          >
-            <X className="w-5 h-5" />
-            Detener Escáner
-          </button>
+          <>
+            <button
+              onClick={stopScanner}
+              className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold shadow-lg shadow-red-500/20 transition-all flex items-center justify-center gap-3"
+            >
+              <X className="w-6 h-6" />
+              <span>Detener Cámara</span>
+            </button>
+
+            <button
+              onClick={() => {
+                stopScanner();
+                setTimeout(startScanner, 300); // Reiniciar con delay
+              }}
+              className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-3"
+            >
+              <RefreshCw className="w-6 h-6" />
+              <span>Reiniciar</span>
+            </button>
+          </>
         )}
       </div>
 
-      <p className="text-slate-500 font-bold">
-        {isScanning ? "Apuntá al código QR del acampante" : "Haz clic en 'Iniciar Escáner' para comenzar"}
-      </p>
+      {/* Input manual como respaldo */}
+      <div className="w-full max-w-md bg-white p-6 rounded-2xl border-2 border-slate-200 shadow-lg">
+        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Entrada Manual (Respaldo)</p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Ingresar DNI manualmente"
+            className="flex-1 px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && e.target.value.trim()) {
+                onScanSuccess(e.target.value.trim());
+                e.target.value = '';
+              }
+            }}
+          />
+          <button
+            onClick={() => {
+              const input = document.querySelector('input[type="text"]');
+              if (input && input.value.trim()) {
+                onScanSuccess(input.value.trim());
+                input.value = '';
+              }
+            }}
+            className="px-6 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold transition-all flex items-center gap-2"
+          >
+            <Search className="w-5 h-5" />
+            <span className="hidden sm:inline">Buscar</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Estado del scanner */}
+      <div className="flex items-center gap-2 px-4 py-3 rounded-2xl border-2 border-slate-200 bg-white">
+        <div className={`w-3 h-3 rounded-full ${isScanning ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></div>
+        <span className="text-sm font-bold text-slate-700">
+          {isScanning ? 'Cámara activa - Escaneando...' : 'Cámara inactiva'}
+        </span>
+      </div>
     </div>
   );
 };
