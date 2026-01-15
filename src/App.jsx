@@ -6,7 +6,7 @@ import {
   Clock, Users, UserCheck, UserX, Package, Award, X, Bell, CheckCircle,
   RefreshCw, Download, AlertTriangle, Menu
 } from 'lucide-react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5QrcodeScanner, Html5QrcodeScanType } from 'html5-qrcode';
 
 
 // Firebase Configuration
