@@ -1090,6 +1090,33 @@ export default function AvivaApp() {
       )}
 
       <style>{`
+       @keyframes scan {
+    0%, 100% { top: 0; }
+    50% { top: calc(100% - 4px); }
+  }
+  .animate-scan {
+    animation: scan 2s ease-in-out infinite;
+  }
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  .animate-slideIn {
+    animation: slideIn 0.3s ease-out;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  .animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
           @keyframes scan {
             0%, 100% { top: 0; }
             50% { top: calc(100% - 4px); }
