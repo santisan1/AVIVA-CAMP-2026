@@ -1,17 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import {
   Home, QrCode, Building2, Search, Calendar, User, Phone, AlertCircle,
   Clock, Users, UserCheck, UserX, Package, Award, X, Bell, CheckCircle,
   RefreshCw, Download, AlertTriangle, Menu
+
 } from 'lucide-react';
-
-
-import { QrScanner } from '@yudiel/react-qr-scanner';
-
-
-
+import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 
 // Firebase Configuration
 const firebaseConfig = {
@@ -58,52 +55,51 @@ const Notification = ({ type, message, onClose }) => {
   );
 };
 
-
-
 const QRScanner = ({ onScanSuccess }) => {
   const [isScanning, setIsScanning] = useState(false);
+  const [scanner, setScanner] = useState(null);
   const [cameraError, setCameraError] = useState(null);
   const [hasPermission, setHasPermission] = useState(false);
-  const [selectedCamera, setSelectedCamera] = useState('environment');
 
+  // Verificar si ya tenemos permisos
   useEffect(() => {
     const checkPermissions = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        // Intentar acceder a la cámara para ver si ya tenemos permisos
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' }
+        });
         stream.getTracks().forEach(track => track.stop());
         setHasPermission(true);
       } catch (err) {
         setHasPermission(false);
       }
     };
+
     checkPermissions();
   }, []);
-
-  const handleScan = (result) => {
-    if (result && result !== '') {
-      console.log('QR detectado:', result);
-      onScanSuccess(result);
-      // Si quieres que siga escaneando, no hagas nada más
-      // Si quieres detener después de escanear, descomenta:
-      // stopScanner();
-    }
-  };
-
-  const handleError = (error) => {
-    console.error('Error de scanner:', error);
-    setCameraError(error.message || 'Error al acceder a la cámara');
-    setIsScanning(false);
-  };
 
   const requestCameraPermission = async () => {
     try {
       setCameraError(null);
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+
+      // Solicitar permiso de cámara explícitamente
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment', // Usar cámara trasera en móviles
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      });
+
+      // Detener el stream inmediatamente (solo queríamos el permiso)
       stream.getTracks().forEach(track => track.stop());
+
       setHasPermission(true);
       startScanner();
+
     } catch (error) {
-      console.error('Error de permisos:', error);
+      console.error('Error al solicitar cámara:', error);
       setCameraError(getCameraErrorMessage(error));
       setHasPermission(false);
     }
@@ -122,14 +118,73 @@ const QRScanner = ({ onScanSuccess }) => {
     return `Error de cámara: ${error.message}`;
   };
 
-  const startScanner = () => {
-    setIsScanning(true);
-    setCameraError(null);
+  // Importante: Asegúrate de importar Html5Qrcode (sin el "Scanner" al final)
+
+
+  // ... dentro del componente ...
+
+  const startScanner = async () => {
+    if (isScanning) return;
+
+    // 1. Instanciamos la versión "Manual" (Html5Qrcode)
+    // Esto no agrega botones automáticos, solo el video
+    const html5QrCode = new Html5Qrcode("reader");
+    setScanner(html5QrCode);
+
+    const qrConfig = {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0
+    };
+
+    try {
+      // 2. Iniciamos la cámara directamente
+      await html5QrCode.start(
+        { facingMode: "environment" }, // Cámara trasera
+        qrConfig,
+        (decodedText) => {
+          console.log('QR detectado:', decodedText);
+          onScanSuccess(decodedText);
+          // Opcional: Detener tras éxito
+          // stopScanner(); 
+        },
+        (errorMessage) => {
+          // Errores de escaneo constantes (ignorar)
+        }
+      );
+
+      setIsScanning(true);
+      setCameraError(null);
+    } catch (error) {
+      console.error('Error al iniciar cámara:', error);
+      setCameraError(getCameraErrorMessage(error));
+      setIsScanning(false);
+    }
   };
 
-  const stopScanner = () => {
-    setIsScanning(false);
+  const stopScanner = async () => {
+    if (scanner && scanner.isScanning) {
+      try {
+        await scanner.stop();
+        // Después de stop(), el div "reader" queda limpio
+        setScanner(null);
+        setIsScanning(false);
+      } catch (error) {
+        console.error('Error al detener scanner:', error);
+      }
+    }
   };
+
+
+
+  // Limpiar al desmontar
+  useEffect(() => {
+    return () => {
+      if (scanner) {
+        stopScanner();
+      }
+    };
+  }, [scanner]);
 
   return (
     <div className="flex flex-col items-center justify-center space-y-6 p-4">
@@ -151,74 +206,25 @@ const QRScanner = ({ onScanSuccess }) => {
         </div>
       )}
 
-      {/* Contenedor del scanner */}
-      <div className="relative w-full max-w-md overflow-hidden rounded-3xl border-4 border-emerald-500 bg-black shadow-2xl" style={{ minHeight: '400px' }}>
+      {/* Elemento donde se renderiza el scanner - DEBE ESTAR SIEMPRE VISIBLE */}
+      <div className="relative w-full max-w-md overflow-hidden rounded-3xl border-4 border-emerald-500 bg-black shadow-2xl min-h-[400px]">
 
-        {isScanning && hasPermission ? (
+        {/* El div "reader" SIEMPRE debe estar primero y visible si isScanning es true */}
+        <div
+          id="reader"
+          className={`w-full h-full ${!isScanning ? 'hidden' : 'block'}`}
+        ></div>
+
+        {isScanning ? (
           <>
-            <div className="absolute inset-0">
-              <QrScanner
-                onDecode={handleScan}
-                onError={handleError}
-                constraints={{
-                  facingMode: selectedCamera,
-                }}
-                scanDelay={500}
-                className="w-full h-full"
-                styles={{
-                  container: {
-                    width: '100%',
-                    height: '100%',
-                    position: 'relative',
-                  },
-                  video: {
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                  },
-                }}
-              />
-            </div>
-
-            {/* Línea de escaneo animada */}
+            {/* Tus guías visuales (línea animada, esquinas, etc) */}
             <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)] animate-scan z-10"></div>
-
-            {/* Guía de recuadro central */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="relative w-64 h-64">
-                {/* Esquinas decorativas */}
-                <div className="absolute -top-2 -left-2 w-8 h-8 border-t-4 border-l-4 border-emerald-400 rounded-tl-lg"></div>
-                <div className="absolute -top-2 -right-2 w-8 h-8 border-t-4 border-r-4 border-emerald-400 rounded-tr-lg"></div>
-                <div className="absolute -bottom-2 -left-2 w-8 h-8 border-b-4 border-l-4 border-emerald-400 rounded-bl-lg"></div>
-                <div className="absolute -bottom-2 -right-2 w-8 h-8 border-b-4 border-r-4 border-emerald-400 rounded-br-lg"></div>
-              </div>
-            </div>
-
-            {/* Instrucciones */}
-            <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
-              <div className="inline-block bg-black/70 backdrop-blur-sm px-4 py-2 rounded-full">
-                <p className="text-white font-bold text-sm flex items-center justify-center gap-2">
-                  <QrCode className="w-4 h-4" />
-                  Apuntá al código QR
-                </p>
-              </div>
-            </div>
+            {/* ... resto de tus guías ... */}
           </>
         ) : (
-          /* Pantalla de inicio cuando no está escaneando */
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-900 to-black">
-            <div className="text-center p-8">
-              <div className="w-32 h-32 border-4 border-dashed border-slate-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                <QrCode className="w-20 h-20 text-slate-500" />
-              </div>
-              <p className="text-slate-300 font-bold text-lg">Listo para escanear</p>
-              <p className="text-slate-400 text-sm mt-2">
-                {hasPermission
-                  ? 'Presiona "Iniciar Cámara" para comenzar'
-                  : 'Presiona "Solicitar Permiso" para acceder a la cámara'
-                }
-              </p>
-            </div>
+          /* Pantalla de inicio - Solo se ve cuando NO estamos escaneando */
+          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-900 to-black z-20">
+            {/* ... tus instrucciones y el icono de QR ... */}
           </div>
         )}
       </div>
@@ -257,15 +263,13 @@ const QRScanner = ({ onScanSuccess }) => {
 
             <button
               onClick={() => {
-                // Cambiar entre cámara frontal y trasera
-                setSelectedCamera(prev =>
-                  prev === 'environment' ? 'user' : 'environment'
-                );
+                stopScanner();
+                setTimeout(startScanner, 500);
               }}
               className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-3"
             >
               <RefreshCw className="w-6 h-6" />
-              <span>Cambiar Cámara</span>
+              <span>Reiniciar</span>
             </button>
           </>
         )}
@@ -304,9 +308,31 @@ const QRScanner = ({ onScanSuccess }) => {
           </button>
         </div>
       </div>
+
+      {/* Estado y ayuda */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-md">
+        <div className={`p-4 rounded-2xl border-2 ${isScanning ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-3 h-3 rounded-full ${isScanning ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></div>
+            <span className="text-sm font-bold text-slate-700">
+              {isScanning ? 'Cámara activa' : 'Cámara inactiva'}
+            </span>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl border-2 border-blue-200 bg-blue-50">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-4 h-4 text-blue-600" />
+            <span className="text-xs font-bold text-blue-700">
+              Usa HTTPS para mejor compatibilidad
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
+
 const ProfileDrawer = ({ acampante, onClose, onCheckIn, onToggleKit }) => {
   const normalizeField = (value) => {
     if (!value || value.toString().trim() === "") return "NO";
