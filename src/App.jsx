@@ -29,79 +29,6 @@ const Notification = ({ type, message, onClose }) => {
     return () => clearTimeout(timer);
   }, [onClose]);
 
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyAwgJfdmLIYklZULlyx1VMeJW7ul_Nmcrs",
-    authDomain: "aviva-camp-2026.firebaseapp.com",
-    projectId: "aviva-camp-2026",
-    storageBucket: "aviva-camp-2026.firebasestorage.app",
-    messagingSenderId: "564202054034",
-    appId: "1:564202054034:web:5c7584214c1e1276b5214b"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-
-  const habitaciones = [];
-
-  // Habitaciones piso 1 (1-20)
-  for (let i = 1; i <= 10; i++) {
-    habitaciones.push({
-      numero: `10${i}`,
-      piso: '1',
-      tipo: 'Standard',
-      capacidad: 4,
-      genero: i % 2 === 0 ? 'mujer' : 'hombre',
-      ocupantes: [],
-      disponible: true
-    });
-  }
-
-  // Habitaciones piso 2 (21-40)
-  for (let i = 1; i <= 10; i++) {
-    habitaciones.push({
-      numero: `20${i}`,
-      piso: '2',
-      tipo: 'Standard',
-      capacidad: 4,
-      genero: i % 2 === 0 ? 'mujer' : 'hombre',
-      ocupantes: [],
-      disponible: true
-    });
-  }
-
-  // Suites
-  habitaciones.push(
-    { numero: 'S101', piso: '1', tipo: 'Suite', capacidad: 2, genero: 'mixta', ocupantes: [], disponible: true },
-    { numero: 'S102', piso: '1', tipo: 'Suite', capacidad: 2, genero: 'mixta', ocupantes: [], disponible: true },
-    { numero: 'S201', piso: '2', tipo: 'Suite', capacidad: 2, genero: 'mixta', ocupantes: [], disponible: true },
-  );
-
-  // Carpas
-  for (let i = 1; i <= 10; i++) {
-    habitaciones.push({
-      numero: `C${i}`,
-      piso: '0',
-      tipo: 'Carpa',
-      capacidad: 6,
-      genero: i <= 5 ? 'hombre' : 'mujer',
-      ocupantes: [],
-      disponible: true
-    });
-  }
-
-  async function crearHabitaciones() {
-    try {
-      for (const habitacion of habitaciones) {
-        await addDoc(collection(db, 'habitaciones'), habitacion);
-        console.log(`Creada: ${habitacion.numero}`);
-      }
-      console.log('Todas las habitaciones creadas');
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  }
-
   const config = {
     success: { bg: 'bg-emerald-50 border-emerald-200', icon: CheckCircle, color: 'text-emerald-700' },
     error: { bg: 'bg-red-50 border-red-200', icon: AlertTriangle, color: 'text-red-700' },
@@ -2024,8 +1951,7 @@ export default function AvivaApp() {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={
-                crearHabitaciones()}
+              onClick={handleForceRefresh}
               disabled={isSyncing}
               className="flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -2043,7 +1969,7 @@ export default function AvivaApp() {
             )}
           </div>
         </div>
-      </header >
+      </header>
 
       <main className="p-6 pb-28">
         {activeTab === 'dashboard' && <Dashboard acampantes={acampantes} />}
@@ -2090,16 +2016,14 @@ export default function AvivaApp() {
         ))}
       </nav>
 
-      {
-        selectedAcampante && (
-          <ProfileDrawer
-            acampante={selectedAcampante}
-            onClose={() => setSelectedAcampante(null)}
-            onCheckIn={handleCheckIn}
-            onToggleKit={handleToggleKit}
-          />
-        )
-      }
+      {selectedAcampante && (
+        <ProfileDrawer
+          acampante={selectedAcampante}
+          onClose={() => setSelectedAcampante(null)}
+          onCheckIn={handleCheckIn}
+          onToggleKit={handleToggleKit}
+        />
+      )}
 
       <style>{`
       /* En el <style> del componente AvivaApp */
@@ -2167,6 +2091,6 @@ export default function AvivaApp() {
             animation: slideIn 0.3s ease-out;
           }
         `}</style>
-    </div >
+    </div>
   );
 }
