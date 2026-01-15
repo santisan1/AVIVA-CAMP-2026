@@ -29,6 +29,79 @@ const Notification = ({ type, message, onClose }) => {
     return () => clearTimeout(timer);
   }, [onClose]);
 
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAwgJfdmLIYklZULlyx1VMeJW7ul_Nmcrs",
+    authDomain: "aviva-camp-2026.firebaseapp.com",
+    projectId: "aviva-camp-2026",
+    storageBucket: "aviva-camp-2026.firebasestorage.app",
+    messagingSenderId: "564202054034",
+    appId: "1:564202054034:web:5c7584214c1e1276b5214b"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  const habitaciones = [];
+
+  // Habitaciones piso 1 (1-20)
+  for (let i = 1; i <= 10; i++) {
+    habitaciones.push({
+      numero: `10${i}`,
+      piso: '1',
+      tipo: 'Standard',
+      capacidad: 4,
+      genero: i % 2 === 0 ? 'mujer' : 'hombre',
+      ocupantes: [],
+      disponible: true
+    });
+  }
+
+  // Habitaciones piso 2 (21-40)
+  for (let i = 1; i <= 10; i++) {
+    habitaciones.push({
+      numero: `20${i}`,
+      piso: '2',
+      tipo: 'Standard',
+      capacidad: 4,
+      genero: i % 2 === 0 ? 'mujer' : 'hombre',
+      ocupantes: [],
+      disponible: true
+    });
+  }
+
+  // Suites
+  habitaciones.push(
+    { numero: 'S101', piso: '1', tipo: 'Suite', capacidad: 2, genero: 'mixta', ocupantes: [], disponible: true },
+    { numero: 'S102', piso: '1', tipo: 'Suite', capacidad: 2, genero: 'mixta', ocupantes: [], disponible: true },
+    { numero: 'S201', piso: '2', tipo: 'Suite', capacidad: 2, genero: 'mixta', ocupantes: [], disponible: true },
+  );
+
+  // Carpas
+  for (let i = 1; i <= 10; i++) {
+    habitaciones.push({
+      numero: `C${i}`,
+      piso: '0',
+      tipo: 'Carpa',
+      capacidad: 6,
+      genero: i <= 5 ? 'hombre' : 'mujer',
+      ocupantes: [],
+      disponible: true
+    });
+  }
+
+  async function crearHabitaciones() {
+    try {
+      for (const habitacion of habitaciones) {
+        await addDoc(collection(db, 'habitaciones'), habitacion);
+        console.log(`Creada: ${habitacion.numero}`);
+      }
+      console.log('Todas las habitaciones creadas');
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  }
+
   const config = {
     success: { bg: 'bg-emerald-50 border-emerald-200', icon: CheckCircle, color: 'text-emerald-700' },
     error: { bg: 'bg-red-50 border-red-200', icon: AlertTriangle, color: 'text-red-700' },
@@ -631,97 +704,185 @@ const KPICard = ({ icon: Icon, label, value, color }) => {
   );
 };
 
-const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, onUpdateHabitacion }) => {
-  const [editingHabitacion, setEditingHabitacion] = useState(null);
-  const [nuevaHabitacion, setNuevaHabitacion] = useState('');
-  const [filtroGenero, setFiltroGenero] = useState('todos');
+const HabitacionesMejoradas = ({ acampantes, onSelectAcampante }) => {
+  const [habitaciones, setHabitaciones] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editingRoom, setEditingRoom] = useState(null);
+  const [selectedGuest, setSelectedGuest] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroPiso, setFiltroPiso] = useState('todos');
+  const [filtroGenero, setFiltroGenero] = useState('todos');
+  const [showUnassigned, setShowUnassigned] = useState(false);
 
-  // Calcular estadísticas
-  const totalAcampantes = acampantes.length;
-  const presentes = acampantes.filter(a => a.presente).length;
-  const sinHabitacion = acampantes.filter(a => !a.habitacion || a.habitacion === 'Sin asignar');
-  const ocupacionTotal = totalAcampantes - sinHabitacion.length;
-  const porcentajeOcupacion = totalAcampantes > 0 ? Math.round((ocupacionTotal / totalAcampantes) * 100) : 0;
+  // Cargar habitaciones desde Firebase
+  useEffect(() => {
+    const loadHabitaciones = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'habitaciones'));
+        const habitacionesData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
 
-  // Agrupar por habitación
-  const habitaciones = {};
-  acampantes.forEach(a => {
-    const hab = a.habitacion || 'Sin asignar';
-    if (!habitaciones[hab]) {
-      habitaciones[hab] = {
-        hombres: [],
-        mujeres: [],
-        total: 0,
-        presentes: 0,
-        tipo: 'Standard'
-      };
-    }
-    if (a.sexo === 'Hombre') habitaciones[hab].hombres.push(a);
-    else if (a.sexo === 'Mujer') habitaciones[hab].mujeres.push(a);
-    habitaciones[hab].total++;
-    if (a.presente) habitaciones[hab].presentes++;
+        // Ordenar por número
+        habitacionesData.sort((a, b) => {
+          if (a.numero === 'Sin asignar') return 1;
+          if (b.numero === 'Sin asignar') return -1;
+          return a.numero.localeCompare(b.numero, undefined, { numeric: true });
+        });
 
-    // Determinar tipo de habitación basado en el número
-    if (hab.includes('Suite') || hab.includes('suite')) habitaciones[hab].tipo = 'Deluxe Suite';
-    else if (hab.includes('Staff')) habitaciones[hab].tipo = 'Staff Suite';
-  });
-
-  // Filtrar habitaciones
-  const habitacionesFiltradas = Object.entries(habitaciones)
-    .filter(([nombre, datos]) => {
-      if (filtroGenero === 'hombre' && datos.hombres.length === 0) return false;
-      if (filtroGenero === 'mujer' && datos.mujeres.length === 0) return false;
-      if (filtroPiso !== 'todos') {
-        if (filtroPiso === '1' && !nombre.startsWith('1')) return false;
-        if (filtroPiso === '2' && !nombre.startsWith('2')) return false;
-        if (filtroPiso === '3' && !nombre.startsWith('3')) return false;
+        setHabitaciones(habitacionesData);
+      } catch (error) {
+        console.error('Error cargando habitaciones:', error);
+      } finally {
+        setLoading(false);
       }
-      if (searchTerm && !nombre.toLowerCase().includes(searchTerm.toLowerCase())) {
-        const nombresHuespedes = [...datos.hombres, ...datos.mujeres]
-          .some(a => a.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
-        if (!nombresHuespedes) return false;
-      }
-      return true;
-    });
+    };
 
-  // Ordenar habitaciones
-  const habitacionesOrdenadas = habitacionesFiltradas.sort(([a], [b]) => {
-    if (a === 'Sin asignar') return 1;
-    if (b === 'Sin asignar') return -1;
-    return a.localeCompare(b, undefined, { numeric: true });
-  });
+    loadHabitaciones();
+  }, []);
 
-  const handleAsignarHabitacion = async (dni) => {
-    if (!nuevaHabitacion.trim()) {
-      alert('Ingresa un número de habitación');
-      return;
-    }
+  // Función para asignar acampante a habitación
+  const assignToRoom = async (dni, roomId) => {
     try {
-      await onUpdateHabitacion(dni, nuevaHabitacion);
-      setEditingHabitacion(null);
-      setNuevaHabitacion('');
+      const roomRef = doc(db, 'habitaciones', roomId);
+      const roomSnapshot = await getDoc(roomRef);
+      const roomData = roomSnapshot.data();
+
+      // Verificar capacidad
+      if (roomData.ocupantes.length >= roomData.capacidad) {
+        alert('Habitación llena');
+        return;
+      }
+
+      // Verificar género si la habitación no es mixta
+      const acampante = acampantes.find(a => a.dni === dni);
+      if (roomData.genero !== 'mixta' && acampante.sexo !== roomData.genero) {
+        alert(`Esta habitación es solo para ${roomData.genero === 'hombre' ? 'hombres' : 'mujeres'}`);
+        return;
+      }
+
+      // Agregar DNI a la habitación
+      await updateDoc(roomRef, {
+        ocupantes: [...roomData.ocupantes, dni]
+      });
+
+      // Actualizar estado local
+      setHabitaciones(prev => prev.map(room =>
+        room.id === roomId
+          ? { ...room, ocupantes: [...room.ocupantes, dni] }
+          : room
+      ));
+
+      setSelectedGuest(null);
+
     } catch (error) {
+      console.error('Error asignando habitación:', error);
       alert('Error al asignar habitación');
     }
   };
 
-  const getInitials = (nombre) => {
-    return nombre
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+  // Función para quitar acampante de habitación
+  const removeFromRoom = async (dni, roomId) => {
+    try {
+      const roomRef = doc(db, 'habitaciones', roomId);
+      const roomSnapshot = await getDoc(roomRef);
+      const roomData = roomSnapshot.data();
+
+      await updateDoc(roomRef, {
+        ocupantes: roomData.ocupantes.filter(id => id !== dni)
+      });
+
+      // Actualizar estado local
+      setHabitaciones(prev => prev.map(room =>
+        room.id === roomId
+          ? { ...room, ocupantes: room.ocupantes.filter(id => id !== dni) }
+          : room
+      ));
+
+    } catch (error) {
+      console.error('Error removiendo de habitación:', error);
+    }
   };
+
+  // Obtener detalles de un acampante por DNI
+  const getAcampanteInfo = (dni) => {
+    return acampantes.find(a => a.dni === dni);
+  };
+
+  // Obtener acampantes no asignados
+  const getUnassignedAcampantes = () => {
+    const assignedDnis = habitaciones.flatMap(room => room.ocupantes);
+    return acampantes.filter(a => !assignedDnis.includes(a.dni));
+  };
+
+  // Filtrar habitaciones
+  const filteredRooms = habitaciones.filter(room => {
+    // Filtrar por piso
+    if (filtroPiso !== 'todos' && room.piso !== filtroPiso) return false;
+
+    // Filtrar por género de habitación
+    if (filtroGenero !== 'todos' && room.genero !== filtroGenero) return false;
+
+    // Filtrar por búsqueda
+    if (searchTerm) {
+      const matchesRoom = room.numero.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesGuest = room.ocupantes.some(dni => {
+        const acampante = getAcampanteInfo(dni);
+        return acampante?.nombre.toLowerCase().includes(searchTerm.toLowerCase());
+      });
+      return matchesRoom || matchesGuest;
+    }
+
+    return true;
+  });
+
+  // Obtener estadísticas
+  const stats = {
+    totalAcampantes: acampantes.length,
+    habitacionesOcupadas: habitaciones.filter(r => r.ocupantes.length > 0).length,
+    habitacionesDisponibles: habitaciones.filter(r => r.ocupantes.length < r.capacidad).length,
+    unassigned: getUnassignedAcampantes().length,
+    ocupacionTotal: habitaciones.reduce((acc, room) => acc + room.ocupantes.length, 0),
+    capacidadTotal: habitaciones.reduce((acc, room) => acc + room.capacidad, 0)
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-700 font-bold">Cargando habitaciones...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-24 max-w-7xl mx-auto">
       {/* Header */}
       <div className="bg-gradient-to-br from-emerald-50 to-white p-6 rounded-3xl border-2 border-slate-200">
-        <h1 className="text-4xl font-black text-slate-900">Room Assignments</h1>
-        <p className="text-slate-600 font-semibold mt-2">Efficiently manage occupancy and logistics for camp participants</p>
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-black text-slate-900">Room Assignments</h1>
+            <p className="text-slate-600 font-semibold mt-2">
+              Manage occupancy for {acampantes.length} camp participants
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button className="px-5 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold transition-all flex items-center gap-2">
+              <Download className="w-5 h-5" />
+              Generate Report
+            </button>
+            <button
+              onClick={() => setShowUnassigned(true)}
+              className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all flex items-center gap-2"
+            >
+              <Users className="w-5 h-5" />
+              Assign Guests
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Barra de búsqueda */}
@@ -739,18 +900,13 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, onUpdateHabitaci
       </div>
 
       {/* Estadísticas globales */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 shadow-sm">
           <div className="flex items-center gap-2 mb-2">
             <Users className="w-5 h-5 text-emerald-600" />
             <p className="text-slate-600 text-sm font-medium">Total Participants</p>
           </div>
-          <div className="flex items-baseline gap-2">
-            <p className="text-3xl font-black text-emerald-600">{totalAcampantes}</p>
-            <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
-              {presentes} Presentes
-            </span>
-          </div>
+          <p className="text-3xl font-black text-slate-900">{stats.totalAcampantes}</p>
         </div>
 
         <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 shadow-sm">
@@ -758,21 +914,24 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, onUpdateHabitaci
             <Building2 className="w-5 h-5 text-blue-600" />
             <p className="text-slate-600 text-sm font-medium">Rooms Occupied</p>
           </div>
-          <div className="flex items-baseline gap-2">
-            <p className="text-3xl font-black text-blue-600">
-              {Object.keys(habitaciones).filter(h => h !== 'Sin asignar').length}
-            </p>
-            <span className="text-xs text-slate-500 font-bold">habilitadas</span>
+          <p className="text-3xl font-black text-slate-900">{stats.habitacionesOcupadas}</p>
+        </div>
+
+        <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <Building2 className="w-5 h-5 text-emerald-600" />
+            <p className="text-slate-600 text-sm font-medium">Available Rooms</p>
           </div>
+          <p className="text-3xl font-black text-slate-900">{stats.habitacionesDisponibles}</p>
         </div>
 
         <div className="bg-white rounded-2xl p-6 border-2 border-orange-200 shadow-sm">
           <div className="flex items-center gap-2 mb-2">
             <AlertTriangle className="w-5 h-5 text-orange-600" />
-            <p className="text-slate-600 text-sm font-medium">Unassigned Guests</p>
+            <p className="text-slate-600 text-sm font-medium">Unassigned</p>
           </div>
           <div className="flex items-baseline gap-2">
-            <p className="text-3xl font-black text-orange-600">{sinHabitacion.length}</p>
+            <p className="text-3xl font-black text-orange-600">{stats.unassigned}</p>
             <span className="text-xs font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
               Needs assignment
             </span>
@@ -787,17 +946,17 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, onUpdateHabitaci
             <div className="flex justify-between mb-2">
               <p className="text-slate-900 text-sm font-bold">Overall Occupancy</p>
               <p className="text-emerald-600 text-sm font-black">
-                {ocupacionTotal} / {totalAcampantes}
+                {stats.ocupacionTotal} / {stats.capacidadTotal}
               </p>
             </div>
             <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
               <div
                 className="h-full bg-emerald-500 transition-all duration-300"
-                style={{ width: `${porcentajeOcupacion}%` }}
+                style={{ width: `${(stats.ocupacionTotal / stats.capacidadTotal) * 100}%` }}
               />
             </div>
             <p className="text-slate-400 text-xs mt-1 font-semibold uppercase tracking-wider">
-              {porcentajeOcupacion}% of capacity reached
+              {Math.round((stats.ocupacionTotal / stats.capacidadTotal) * 100)}% capacity
             </p>
           </div>
 
@@ -859,77 +1018,78 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, onUpdateHabitaci
 
       {/* Grid de habitaciones */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {habitacionesOrdenadas.map(([nombre, datos]) => {
-          const isSinAsignar = nombre === 'Sin asignar';
-          const isFull = datos.total >= 4; // Asumimos 4 camas por habitación
-          const isEmpty = datos.total === 0;
-          const totalHuespedes = datos.hombres.length + datos.mujeres.length;
+        {filteredRooms.map((room) => {
+          const isFull = room.ocupantes.length >= room.capacidad;
+          const isEmpty = room.ocupantes.length === 0;
+          const ocupacion = `${room.ocupantes.length}/${room.capacidad}`;
 
           return (
             <div
-              key={nombre}
-              className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden flex flex-col group transition-all ${isSinAsignar
-                ? 'border-orange-300'
-                : isFull
-                  ? 'border-emerald-300'
-                  : isEmpty
-                    ? 'border-slate-300'
-                    : 'border-blue-300 hover:border-blue-500'
+              key={room.id}
+              className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden flex flex-col group transition-all ${isFull
+                ? 'border-emerald-300'
+                : isEmpty
+                  ? 'border-slate-300'
+                  : 'border-blue-300 hover:border-blue-500'
                 }`}
             >
               {/* Header de la habitación */}
-              <div className={`p-5 border-b-2 flex justify-between items-start ${isSinAsignar
-                ? 'bg-orange-50 border-orange-200'
-                : isFull
-                  ? 'bg-emerald-50 border-emerald-200'
-                  : isEmpty
-                    ? 'bg-slate-50 border-slate-200'
-                    : 'bg-blue-50 border-blue-200'
+              <div className={`p-5 border-b-2 flex justify-between items-start ${isFull
+                ? 'bg-emerald-50 border-emerald-200'
+                : isEmpty
+                  ? 'bg-slate-50 border-slate-200'
+                  : 'bg-blue-50 border-blue-200'
                 }`}>
                 <div>
-                  <h3 className="text-xl font-black text-slate-900">
-                    {isSinAsignar ? 'Unassigned Guests' : `Room ${nombre}`}
-                  </h3>
-                  <p className="text-xs font-bold text-emerald-600 uppercase tracking-tight mt-1">
-                    {datos.tipo} • {nombre.startsWith('1') ? 'Ground Floor' :
-                      nombre.startsWith('2') ? 'Floor 1' :
-                        nombre.startsWith('3') ? 'Floor 2' : 'Various'}
-                  </p>
+                  <h3 className="text-xl font-black text-slate-900">Room {room.numero}</h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs font-bold text-emerald-600 uppercase tracking-tight">
+                      {room.tipo}
+                    </span>
+                    <span className="text-xs text-slate-500">•</span>
+                    <span className="text-xs text-slate-500 font-semibold">
+                      Floor {room.piso}
+                    </span>
+                    <span className="text-xs text-slate-500">•</span>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${room.genero === 'hombre'
+                      ? 'bg-blue-100 text-blue-700'
+                      : room.genero === 'mujer'
+                        ? 'bg-pink-100 text-pink-700'
+                        : 'bg-purple-100 text-purple-700'
+                      }`}>
+                      {room.genero === 'hombre' ? 'Men' : room.genero === 'mujer' ? 'Women' : 'Mixed'}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex flex-col items-end">
-                  {!isSinAsignar && !isEmpty && (
+                  {!isEmpty && (
                     <span className={`text-[11px] px-2 py-0.5 rounded-full font-black mb-1 ${isFull
                       ? 'bg-emerald-100 text-emerald-700'
                       : 'bg-blue-100 text-blue-700'
                       }`}>
-                      {totalHuespedes}/4 BEDS
+                      {ocupacion} BEDS
                     </span>
                   )}
 
-                  {isSinAsignar && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">
-                        {datos.total} GUESTS
-                      </span>
-                    </div>
-                  )}
-
-                  {!isSinAsignar && totalHuespedes > 0 && (
+                  {!isEmpty && (
                     <div className="flex -space-x-2">
-                      {[...datos.hombres, ...datos.mujeres]
-                        .slice(0, 3)
-                        .map((acampante, idx) => (
+                      {room.ocupantes.slice(0, 3).map((dni, idx) => {
+                        const acampante = getAcampanteInfo(dni);
+                        return (
                           <div
                             key={idx}
-                            className="w-6 h-6 rounded-full border-2 border-white bg-slate-300 flex items-center justify-center text-xs font-bold text-slate-700"
+                            onClick={() => onSelectAcampante(acampante)}
+                            className="w-6 h-6 rounded-full border-2 border-white bg-slate-300 flex items-center justify-center text-xs font-bold text-slate-700 cursor-pointer hover:scale-110 transition-transform"
+                            title={acampante?.nombre}
                           >
-                            {getInitials(acampante.nombre)}
+                            {acampante?.nombre?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                           </div>
-                        ))}
-                      {totalHuespedes > 3 && (
+                        );
+                      })}
+                      {room.ocupantes.length > 3 && (
                         <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600">
-                          +{totalHuespedes - 3}
+                          +{room.ocupantes.length - 3}
                         </div>
                       )}
                     </div>
@@ -939,92 +1099,72 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, onUpdateHabitaci
 
               {/* Lista de huéspedes */}
               <div className="p-5 flex-1 space-y-3">
-                {isSinAsignar ? (
-                  <div className="space-y-3">
-                    {datos.hombres.concat(datos.mujeres).slice(0, 4).map((acampante, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => onSelectAcampante(acampante)}
-                        className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-700 font-bold">
-                            {getInitials(acampante.nombre)}
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-900">{acampante.nombre}</p>
-                            <p className="text-[10px] text-slate-500 font-semibold">
-                              {acampante.sexo?.toUpperCase()} • {acampante.edad} años
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingHabitacion(acampante.dni);
-                          }}
-                          className="text-orange-600 hover:text-orange-700"
-                        >
-                          <Building2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    ))}
-                    {datos.total > 4 && (
-                      <div className="text-center pt-2 border-t border-slate-200">
-                        <p className="text-xs text-slate-500 font-semibold">
-                          And {datos.total - 4} more unassigned guests...
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ) : isEmpty ? (
+                {isEmpty ? (
                   <div className="flex flex-col items-center justify-center py-8 space-y-3 opacity-60">
                     <Building2 className="w-12 h-12 text-slate-400" />
                     <p className="text-sm font-bold text-center text-slate-500">
                       No guests assigned yet
                     </p>
-                    <button className="mt-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors">
-                      Quick Assign
-                    </button>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {datos.hombres.concat(datos.mujeres).map((acampante, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => onSelectAcampante(acampante)}
-                        className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors group"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold ${acampante.presente
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-slate-100 text-slate-700'
-                            }`}>
-                            {getInitials(acampante.nombre)}
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-900">{acampante.nombre}</p>
-                            <p className="text-[10px] text-slate-500 font-semibold">
-                              {acampante.sexo?.toUpperCase()} • {acampante.edad} años
-                              {acampante.presente && ' • ✓ Presente'}
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingHabitacion(acampante.dni);
-                          }}
-                          className="text-slate-400 hover:text-emerald-600 opacity-0 group-hover:opacity-100 transition-all"
-                        >
-                          <Building2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    ))}
+                    {room.ocupantes.map((dni, idx) => {
+                      const acampante = getAcampanteInfo(dni);
+                      if (!acampante) return null;
 
-                    {!isFull && totalHuespedes < 4 && (
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() => onSelectAcampante(acampante)}
+                          className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold ${acampante.presente
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-slate-100 text-slate-700'
+                              }`}>
+                              {acampante.nombre.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-900">{acampante.nombre}</p>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-slate-500 font-semibold">
+                                  {acampante.sexo === 'Hombre' ? 'MALE' : 'FEMALE'}
+                                </span>
+                                <span className="text-[10px] text-slate-300">•</span>
+                                <span className="text-[10px] text-slate-500 font-semibold">
+                                  {acampante.edad} years
+                                </span>
+                                {acampante.presente && (
+                                  <>
+                                    <span className="text-[10px] text-slate-300">•</span>
+                                    <span className="text-[10px] font-bold text-emerald-600">
+                                      ✓ Present
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeFromRoom(dni, room.id);
+                            }}
+                            className="text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    {!isFull && (
                       <div className="pt-2">
-                        <button className="w-full border-2 border-dashed border-slate-300 rounded-lg py-2 text-slate-400 text-xs font-bold hover:border-emerald-500 hover:text-emerald-500 transition-all flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => setSelectedGuest(room.id)}
+                          className="w-full border-2 border-dashed border-slate-300 rounded-lg py-2 text-slate-400 text-xs font-bold hover:border-emerald-500 hover:text-emerald-500 transition-all flex items-center justify-center gap-2"
+                        >
                           <Plus className="w-4 h-4" />
                           Add Guest
                         </button>
@@ -1036,7 +1176,10 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, onUpdateHabitaci
 
               {/* Footer de la habitación */}
               <div className="p-3 bg-slate-50 flex gap-2 border-t border-slate-200">
-                <button className="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-700 hover:border-emerald-500 transition-colors">
+                <button
+                  onClick={() => setEditingRoom(room)}
+                  className="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-700 hover:border-emerald-500 transition-colors"
+                >
                   Edit Room
                 </button>
                 <button className="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-700 hover:border-emerald-500 transition-colors">
@@ -1048,59 +1191,96 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, onUpdateHabitaci
         })}
       </div>
 
-      {/* Botón flotante para asignar */}
-      {editingHabitacion && (
+      {/* Modal para asignar huésped */}
+      {selectedGuest && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-black text-slate-900 mb-2">Assign Room</h3>
-            <p className="text-slate-600 text-sm mb-4">
-              Enter the room number for this guest
-            </p>
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-black text-slate-900">Assign Guest to Room {selectedGuest}</h3>
+              <button onClick={() => setSelectedGuest(null)} className="text-slate-400 hover:text-slate-700">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
             <div className="space-y-4">
-              <input
-                type="text"
-                value={nuevaHabitacion}
-                onChange={(e) => setNuevaHabitacion(e.target.value)}
-                placeholder="e.g., 101, 202, Suite-1"
-                className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-emerald-500 font-semibold"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                {['101', '102', '201', '202', '301', 'Suite'].map(room => (
-                  <button
-                    key={room}
-                    onClick={() => setNuevaHabitacion(room)}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-semibold transition-colors"
+              <p className="text-slate-600 text-sm mb-4">
+                Select a guest to assign to this room:
+              </p>
+
+              <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                {getUnassignedAcampantes().map(acampante => (
+                  <div
+                    key={acampante.dni}
+                    onClick={() => assignToRoom(acampante.dni, selectedGuest)}
+                    className="flex items-center justify-between p-4 rounded-xl border-2 border-slate-200 hover:border-emerald-500 cursor-pointer transition-all hover:bg-slate-50"
                   >
-                    {room}
-                  </button>
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
+                        <User className="w-7 h-7 text-white" strokeWidth={2.5} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-slate-900">{acampante.nombre}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-slate-500 font-semibold">DNI: {acampante.dni}</span>
+                          <span className="text-xs text-slate-300">•</span>
+                          <span className="text-xs text-slate-500 font-semibold">
+                            {acampante.sexo === 'Hombre' ? 'MALE' : 'FEMALE'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-slate-400" />
+                  </div>
                 ))}
               </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setEditingHabitacion(null);
-                    setNuevaHabitacion('');
-                  }}
-                  className="flex-1 px-4 py-3 border-2 border-slate-300 rounded-xl text-slate-700 font-bold hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleAsignarHabitacion(editingHabitacion)}
-                  className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors"
-                >
-                  Assign Room
-                </button>
-              </div>
+
+              {getUnassignedAcampantes().length === 0 && (
+                <div className="text-center py-8">
+                  <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-slate-500 font-semibold">All guests are assigned to rooms</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
 
+      {/* Modal para editar habitación */}
+      {editingRoom && (
+        <EditRoomModal
+          room={editingRoom}
+          onClose={() => setEditingRoom(null)}
+          onSave={async (updatedRoom) => {
+            // Implementar actualización en Firebase
+            try {
+              const roomRef = doc(db, 'habitaciones', updatedRoom.id);
+              await updateDoc(roomRef, updatedRoom);
+              setHabitaciones(prev => prev.map(r =>
+                r.id === updatedRoom.id ? updatedRoom : r
+              ));
+              setEditingRoom(null);
+            } catch (error) {
+              console.error('Error updating room:', error);
+            }
+          }}
+        />
+      )}
+
+      {/* Modal para acampantes sin asignar */}
+      {showUnassigned && (
+        <UnassignedModal
+          acampantes={getUnassignedAcampantes()}
+          habitaciones={habitaciones.filter(r => r.ocupantes.length < r.capacidad)}
+          onSelectAcampante={onSelectAcampante}
+          onAssign={(dni, roomId) => assignToRoom(dni, roomId)}
+          onClose={() => setShowUnassigned(false)}
+        />
+      )}
+
       {/* Footer / Pagination */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-4 py-6 border-t border-slate-200">
         <p className="text-slate-500 text-sm font-bold">
-          Showing {habitacionesOrdenadas.length} of {Object.keys(habitaciones).length} rooms
+          Showing {filteredRooms.length} of {habitaciones.length} rooms
         </p>
         <div className="flex items-center gap-2">
           <button className="w-10 h-10 rounded-lg border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors">
@@ -1123,12 +1303,270 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, onUpdateHabitaci
 
       {/* Botón flotante de acción rápida */}
       <div className="fixed bottom-8 right-8">
-        <button className="w-14 h-14 bg-emerald-600 text-white rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition-transform group relative">
+        <button
+          onClick={() => setShowUnassigned(true)}
+          className="w-14 h-14 bg-emerald-600 text-white rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition-transform group relative"
+        >
           <Plus className="w-7 h-7" />
           <span className="absolute right-full mr-4 bg-slate-900 text-white text-xs px-3 py-1.5 rounded-lg font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
             QUICK ASSIGN
           </span>
         </button>
+      </div>
+    </div>
+  );
+};
+const EditRoomModal = ({ room, onClose, onSave }) => {
+  const [formData, setFormData] = useState(room);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-black text-slate-900">Edit Room {room.numero}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <label className="block text-sm font-bold text-slate-700">Room Number</label>
+            <input
+              type="text"
+              value={formData.numero}
+              onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
+              className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-emerald-500 font-semibold"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="block text-sm font-bold text-slate-700">Floor</label>
+              <select
+                value={formData.piso}
+                onChange={(e) => setFormData({ ...formData, piso: e.target.value })}
+                className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-emerald-500 font-semibold"
+              >
+                <option value="1">Floor 1</option>
+                <option value="2">Floor 2</option>
+                <option value="3">Floor 3</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-bold text-slate-700">Capacity</label>
+              <select
+                value={formData.capacidad}
+                onChange={(e) => setFormData({ ...formData, capacidad: parseInt(e.target.value) })}
+                className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-emerald-500 font-semibold"
+              >
+                <option value="2">2 Beds</option>
+                <option value="4">4 Beds</option>
+                <option value="6">6 Beds</option>
+                <option value="8">8 Beds</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-bold text-slate-700">Room Type</label>
+            <select
+              value={formData.tipo}
+              onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
+              className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-emerald-500 font-semibold"
+            >
+              <option value="Standard">Standard</option>
+              <option value="Deluxe">Deluxe</option>
+              <option value="Suite">Suite</option>
+              <option value="Carpa">Tent</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-bold text-slate-700">Gender</label>
+            <div className="flex gap-3">
+              {['mixta', 'hombre', 'mujer'].map(gender => (
+                <button
+                  key={gender}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, genero: gender })}
+                  className={`flex-1 px-4 py-3 rounded-xl border-2 font-bold transition-all ${formData.genero === gender
+                    ? gender === 'hombre' ? 'bg-blue-100 text-blue-700 border-blue-300'
+                      : gender === 'mujer' ? 'bg-pink-100 text-pink-700 border-pink-300'
+                        : 'bg-purple-100 text-purple-700 border-purple-300'
+                    : 'bg-slate-100 text-slate-700 border-slate-300'
+                    }`}
+                >
+                  {gender === 'hombre' ? 'Men Only' : gender === 'mujer' ? 'Women Only' : 'Mixed'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-3 border-2 border-slate-300 rounded-xl text-slate-700 font-bold hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors"
+            >
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+const UnassignedModal = ({ acampantes, habitaciones, onSelectAcampante, onAssign, onClose }) => {
+  const [selectedAcampante, setSelectedAcampante] = useState(null);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl p-6 max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-2xl font-black text-slate-900">Unassigned Guests</h3>
+            <p className="text-slate-600 font-semibold mt-1">
+              {acampantes.length} guests need room assignment
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Lista de acampantes sin asignar */}
+          <div className="space-y-4">
+            <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">Unassigned Guests</h4>
+            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+              {acampantes.map(acampante => (
+                <div
+                  key={acampante.dni}
+                  onClick={() => {
+                    setSelectedAcampante(acampante);
+                    onSelectAcampante(acampante);
+                  }}
+                  className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedAcampante?.dni === acampante.dni
+                    ? 'border-emerald-500 bg-emerald-50'
+                    : 'border-slate-200 hover:border-emerald-500 hover:bg-slate-50'
+                    }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg">
+                      <User className="w-7 h-7 text-white" strokeWidth={2.5} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-slate-900">{acampante.nombre}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-slate-500 font-semibold">DNI: {acampante.dni}</span>
+                        <span className="text-xs text-slate-300">•</span>
+                        <span className="text-xs text-slate-500 font-semibold">
+                          {acampante.sexo === 'Hombre' ? 'MALE' : 'FEMALE'}
+                        </span>
+                        <span className="text-xs text-slate-300">•</span>
+                        <span className="text-xs text-slate-500 font-semibold">
+                          {acampante.edad} years
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-slate-400" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Habitaciones disponibles para asignar */}
+          <div className="space-y-4">
+            <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">Available Rooms</h4>
+            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+              {habitaciones.map(room => {
+                const availableBeds = room.capacidad - room.ocupantes.length;
+                const isCompatible = !selectedAcampante ||
+                  room.genero === 'mixta' ||
+                  room.genero === (selectedAcampante.sexo === 'Hombre' ? 'hombre' : 'mujer');
+
+                return (
+                  <div
+                    key={room.id}
+                    onClick={() => selectedAcampante && isCompatible && onAssign(selectedAcampante.dni, room.id)}
+                    className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${!selectedAcampante
+                      ? 'border-slate-200 opacity-50 cursor-not-allowed'
+                      : !isCompatible
+                        ? 'border-red-200 bg-red-50 cursor-not-allowed'
+                        : 'border-emerald-200 hover:border-emerald-500 hover:bg-emerald-50 cursor-pointer'
+                      }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${!isCompatible ? 'bg-red-100' : 'bg-emerald-100'
+                        }`}>
+                        <Building2 className={`w-7 h-7 ${!isCompatible ? 'text-red-600' : 'text-emerald-600'
+                          }`} strokeWidth={2.5} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-slate-900">Room {room.numero}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-slate-500 font-semibold">
+                            {availableBeds} beds available
+                          </span>
+                          <span className="text-xs text-slate-300">•</span>
+                          <span className="text-xs text-slate-500 font-semibold">
+                            Floor {room.piso}
+                          </span>
+                          <span className="text-xs text-slate-300">•</span>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${room.genero === 'hombre'
+                            ? 'bg-blue-100 text-blue-700'
+                            : room.genero === 'mujer'
+                              ? 'bg-pink-100 text-pink-700'
+                              : 'bg-purple-100 text-purple-700'
+                            }`}>
+                            {room.genero === 'hombre' ? 'Men' : room.genero === 'mujer' ? 'Women' : 'Mixed'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {!isCompatible && selectedAcampante && (
+                      <span className="text-xs font-bold text-red-600">
+                        Gender mismatch
+                      </span>
+                    )}
+
+                    {isCompatible && selectedAcampante && (
+                      <button className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors">
+                        Assign
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {selectedAcampante && (
+          <div className="mt-6 p-4 bg-slate-50 rounded-xl border-2 border-slate-200">
+            <p className="text-sm font-bold text-slate-900">
+              Selected: <span className="text-emerald-600">{selectedAcampante.nombre}</span>
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              Click on an available room to assign this guest
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1586,7 +2024,8 @@ export default function AvivaApp() {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={handleForceRefresh}
+              onClick={
+                crearHabitaciones()}
               disabled={isSyncing}
               className="flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -1604,7 +2043,7 @@ export default function AvivaApp() {
             )}
           </div>
         </div>
-      </header>
+      </header >
 
       <main className="p-6 pb-28">
         {activeTab === 'dashboard' && <Dashboard acampantes={acampantes} />}
@@ -1651,14 +2090,16 @@ export default function AvivaApp() {
         ))}
       </nav>
 
-      {selectedAcampante && (
-        <ProfileDrawer
-          acampante={selectedAcampante}
-          onClose={() => setSelectedAcampante(null)}
-          onCheckIn={handleCheckIn}
-          onToggleKit={handleToggleKit}
-        />
-      )}
+      {
+        selectedAcampante && (
+          <ProfileDrawer
+            acampante={selectedAcampante}
+            onClose={() => setSelectedAcampante(null)}
+            onCheckIn={handleCheckIn}
+            onToggleKit={handleToggleKit}
+          />
+        )
+      }
 
       <style>{`
       /* En el <style> del componente AvivaApp */
@@ -1726,6 +2167,6 @@ export default function AvivaApp() {
             animation: slideIn 0.3s ease-out;
           }
         `}</style>
-    </div>
+    </div >
   );
 }
