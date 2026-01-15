@@ -1041,7 +1041,11 @@ export default function AvivaApp() {
 
       <main className="p-6 pb-28">
         {activeTab === 'dashboard' && <Dashboard acampantes={acampantes} />}
-        {activeTab === 'scanner' && <QRScanner onScanSuccess={handleScan} />}
+        {activeTab === 'scanner' && (
+          <div className="space-y-6 pb-24 max-w-4xl mx-auto">
+            <QRScanner onScanSuccess={handleScan} />
+          </div>
+        )}
         {activeTab === 'habitaciones' && (
           <HabitacionesMejoradas
             acampantes={acampantes}
