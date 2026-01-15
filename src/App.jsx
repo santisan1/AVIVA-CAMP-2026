@@ -436,7 +436,13 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, onUpdateHabitaci
   };
 
   const sinHabitacion = acampantes.filter(a => !a.habitacion || a.habitacion === 'Sin asignar');
-
+  return (
+    <div>
+      {/* Tu contenido de habitaciones aquí */}
+      <h1>Habitaciones Mejoradas</h1>
+      {/* Agrega todo el JSX que necesites */}
+    </div>
+  )
 }
 const SearchView = ({ acampantes, onSelectAcampante }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -693,35 +699,6 @@ const Agenda = () => {
   );
 };
 
-const handleUpdateHabitacion = async (dni, nuevaHabitacion) => {
-  try {
-    const acampanteRef = doc(db, 'acampantes', dni);
-    await updateDoc(acampanteRef, {
-      habitacion: nuevaHabitacion
-    });
-
-    setAcampantes(prev => prev.map(a =>
-      a.dni === dni ? { ...a, habitacion: nuevaHabitacion } : a
-    ));
-
-    setSelectedAcampante(prev => prev ? {
-      ...prev,
-      habitacion: nuevaHabitacion
-    } : null);
-
-    setNotification({
-      type: 'success',
-      message: `✓ Habitación actualizada a: ${nuevaHabitacion}`
-    });
-
-  } catch (error) {
-    console.error('Error al actualizar habitación:', error);
-    setNotification({
-      type: 'error',
-      message: '✗ Error al actualizar habitación'
-    });
-  }
-};
 
 export default function AvivaApp() {
   const [notification, setNotification] = useState(null);
@@ -735,32 +712,37 @@ export default function AvivaApp() {
   useEffect(() => {
     loadAcampantes();
   }, []);
-
-  const QRScanner = ({ onScanSuccess }) => {
-    useEffect(() => {
-      const scanner = new Html5QrcodeScanner("reader", {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
+  const handleUpdateHabitacion = async (dni, nuevaHabitacion) => {
+    try {
+      const acampanteRef = doc(db, 'acampantes', dni);
+      await updateDoc(acampanteRef, {
+        habitacion: nuevaHabitacion
       });
 
-      scanner.render((decodedText) => {
-        // Cuando detecta el DNI, ejecuta la función de búsqueda
-        onScanSuccess(decodedText);
-        // Opcional: detener el scanner tras el éxito para procesar
-        scanner.clear();
-      }, (error) => {
-        // Errores de lectura silenciosos
+      setAcampantes(prev => prev.map(a =>
+        a.dni === dni ? { ...a, habitacion: nuevaHabitacion } : a
+      ));
+
+      setSelectedAcampante(prev => prev ? {
+        ...prev,
+        habitacion: nuevaHabitacion
+      } : null);
+
+      setNotification({
+        type: 'success',
+        message: `✓ Habitación actualizada a: ${nuevaHabitacion}`
       });
 
-      return () => scanner.clear();
-    }, [onScanSuccess]);
-
-    return (
-      <div className="mx-auto w-full max-w-md overflow-hidden rounded-3xl border-4 border-orange-500 bg-black">
-        <div id="reader"></div>
-      </div>
-    );
+    } catch (error) {
+      console.error('Error al actualizar habitación:', error);
+      setNotification({
+        type: 'error',
+        message: '✗ Error al actualizar habitación'
+      });
+    }
   };
+
+
   const loadAcampantes = async () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'acampantes'));
@@ -986,27 +968,27 @@ export default function AvivaApp() {
       )}
 
       <style>{`
-        @keyframes scan {
-          0%, 100% { top: 0; }
-          50% { top: calc(100% - 4px); }
-        }
-        .animate-scan {
-          animation: scan 2s ease-in-out infinite;
-        }
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateX(100%);
+          @keyframes scan {
+            0%, 100% { top: 0; }
+            50% { top: calc(100% - 4px); }
           }
-          to {
-            opacity: 1;
-            transform: translateX(0);
+          .animate-scan {
+            animation: scan 2s ease-in-out infinite;
           }
-        }
-        .animate-slideIn {
-          animation: slideIn 0.3s ease-out;
-        }
-      `}</style>
+          @keyframes slideIn {
+            from {
+              opacity: 0;
+              transform: translateX(100%);
+            }
+            to {
+              opacity: 1;
+              transform: translateX(0);
+            }
+          }
+          .animate-slideIn {
+            animation: slideIn 0.3s ease-out;
+          }
+        `}</style>
     </div>
   );
 }
