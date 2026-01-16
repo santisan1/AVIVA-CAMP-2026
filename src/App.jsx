@@ -634,144 +634,179 @@ const KPICard = ({ icon: Icon, label, value, color }) => {
 const HabitacionesMejoradas = ({ acampantes, onSelectAcampante }) => {
   const [habitaciones, setHabitaciones] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [editingRoom, setEditingRoom] = useState(null);
-  const [selectedGuest, setSelectedGuest] = useState(null);
+  const [acampantesSinHabitacion, setAcampantesSinHabitacion] = useState([]);
+  const [draggedAcampante, setDraggedAcampante] = useState(null);
+  const [targetHabitacion, setTargetHabitacion] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filtroPiso, setFiltroPiso] = useState('todos');
   const [filtroGenero, setFiltroGenero] = useState('todos');
-  const [showUnassigned, setShowUnassigned] = useState(false);
 
-  // Cargar habitaciones desde Firebase
+  // Cargar habitaciones
   useEffect(() => {
-    const loadHabitaciones = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, 'habitaciones'));
-        const habitacionesData = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-
-        // Ordenar por número
-        habitacionesData.sort((a, b) => {
-          if (a.numero === 'Sin asignar') return 1;
-          if (b.numero === 'Sin asignar') return -1;
-          return a.numero.localeCompare(b.numero, undefined, { numeric: true });
-        });
-
-        setHabitaciones(habitacionesData);
-      } catch (error) {
-        console.error('Error cargando habitaciones:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadHabitaciones();
   }, []);
 
-  // Función para asignar acampante a habitación
-  const assignToRoom = async (dni, roomId) => {
+  const loadHabitaciones = async () => {
     try {
-      const roomRef = doc(db, 'habitaciones', roomId);
-      const roomSnapshot = await getDoc(roomRef);
-      const roomData = roomSnapshot.data();
+      const querySnapshot = await getDocs(collection(db, 'habitaciones'));
+      const habitacionesData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Ordenar por número
+      habitacionesData.sort((a, b) => {
+        return a.numero.localeCompare(b.numero, undefined, { numeric: true });
+      });
+
+      setHabitaciones(habitacionesData);
+    } catch (error) {
+      console.error('Error cargando habitaciones:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Actualizar acampantes sin habitación
+  useEffect(() => {
+    const actualizarAsignaciones = () => {
+      // Obtener todos los DNI asignados
+      const asignados = habitaciones.flatMap(h => h.ocupantes || []);
+
+      // Filtrar acampantes no asignados
+      const sinAsignar = acampantes.filter(a => !asignados.includes(a.dni));
+
+      setAcampantesSinHabitacion(sinAsignar);
+    };
+
+    if (habitaciones.length > 0) {
+      actualizarAsignaciones();
+    }
+  }, [habitaciones, acampantes]);
+
+  // Función simple para asignar acampante a habitación
+  const asignarAcampante = async (dni, habitacionId) => {
+    try {
+      const acampante = acampantes.find(a => a.dni === dni);
+      if (!acampante) return;
+
+      const habitacion = habitaciones.find(h => h.id === habitacionId);
+      if (!habitacion) return;
 
       // Verificar capacidad
-      if (roomData.ocupantes.length >= roomData.capacidad) {
-        alert('Habitación llena');
+      const ocupantesActuales = habitacion.ocupantes?.length || 0;
+      if (ocupantesActuales >= habitacion.capacidad) {
+        alert(`❌ Habitación ${habitacion.numero} está llena (${habitacion.capacidad}/${habitacion.capacidad})`);
         return;
       }
 
-      // Verificar género si la habitación no es mixta
-      const acampante = acampantes.find(a => a.dni === dni);
-      if (roomData.genero !== 'mixta' && acampante.sexo !== roomData.genero) {
-        alert(`Esta habitación es solo para ${roomData.genero === 'hombre' ? 'hombres' : 'mujeres'}`);
-        return;
+      // Verificar compatibilidad de género (simplificado)
+      if (habitacion.genero !== 'mixta') {
+        const generoAcampante = acampante.sexo.toLowerCase();
+        const generoHabitacion = habitacion.genero;
+
+        // Convertir "Masculino" -> "hombre", "Femenino" -> "mujer"
+        const generoMapeado = generoAcampante.includes('masculino') ? 'hombre' :
+          generoAcampante.includes('femenino') ? 'mujer' :
+            generoAcampante;
+
+        if (generoHabitacion !== generoMapeado) {
+          alert(`❌ ${acampante.nombre} no puede ir en habitación de ${generoHabitacion === 'hombre' ? 'hombres' : 'mujeres'}`);
+          return;
+        }
       }
 
-      // Agregar DNI a la habitación
-      await updateDoc(roomRef, {
-        ocupantes: [...roomData.ocupantes, dni]
+      // Actualizar habitación en Firebase
+      const habitacionRef = doc(db, 'habitaciones', habitacionId);
+      const nuevosOcupantes = [...(habitacion.ocupantes || []), dni];
+
+      await updateDoc(habitacionRef, {
+        ocupantes: nuevosOcupantes
       });
 
       // Actualizar estado local
-      setHabitaciones(prev => prev.map(room =>
-        room.id === roomId
-          ? { ...room, ocupantes: [...room.ocupantes, dni] }
-          : room
+      setHabitaciones(prev => prev.map(h =>
+        h.id === habitacionId
+          ? { ...h, ocupantes: nuevosOcupantes }
+          : h
       ));
 
-      setSelectedGuest(null);
+      // Actualizar acampante en Firebase (mantener campo habitación por compatibilidad)
+      const acampanteRef = doc(db, 'acampantes', dni);
+      await updateDoc(acampanteRef, {
+        habitacion: habitacion.numero
+      });
+
+      // Limpiar selección
+      setDraggedAcampante(null);
+      setTargetHabitacion(null);
 
     } catch (error) {
-      console.error('Error asignando habitación:', error);
+      console.error('Error asignando acampante:', error);
       alert('Error al asignar habitación');
     }
   };
 
   // Función para quitar acampante de habitación
-  const removeFromRoom = async (dni, roomId) => {
+  const quitarAcampante = async (dni, habitacionId) => {
     try {
-      const roomRef = doc(db, 'habitaciones', roomId);
-      const roomSnapshot = await getDoc(roomRef);
-      const roomData = roomSnapshot.data();
+      const habitacionRef = doc(db, 'habitaciones', habitacionId);
+      const habitacion = habitaciones.find(h => h.id === habitacionId);
 
-      await updateDoc(roomRef, {
-        ocupantes: roomData.ocupantes.filter(id => id !== dni)
+      if (!habitacion) return;
+
+      const nuevosOcupantes = habitacion.ocupantes?.filter(id => id !== dni) || [];
+
+      await updateDoc(habitacionRef, {
+        ocupantes: nuevosOcupantes
+      });
+
+      // Actualizar acampante
+      const acampanteRef = doc(db, 'acampantes', dni);
+      await updateDoc(acampanteRef, {
+        habitacion: ''
       });
 
       // Actualizar estado local
-      setHabitaciones(prev => prev.map(room =>
-        room.id === roomId
-          ? { ...room, ocupantes: room.ocupantes.filter(id => id !== dni) }
-          : room
+      setHabitaciones(prev => prev.map(h =>
+        h.id === habitacionId
+          ? { ...h, ocupantes: nuevosOcupantes }
+          : h
       ));
 
     } catch (error) {
-      console.error('Error removiendo de habitación:', error);
+      console.error('Error quitando acampante:', error);
     }
-  };
-
-  // Obtener detalles de un acampante por DNI
-  const getAcampanteInfo = (dni) => {
-    return acampantes.find(a => a.dni === dni);
-  };
-
-  // Obtener acampantes no asignados
-  const getUnassignedAcampantes = () => {
-    const assignedDnis = habitaciones.flatMap(room => room.ocupantes);
-    return acampantes.filter(a => !assignedDnis.includes(a.dni));
   };
 
   // Filtrar habitaciones
-  const filteredRooms = habitaciones.filter(room => {
-    // Filtrar por piso
-    if (filtroPiso !== 'todos' && room.piso !== filtroPiso) return false;
-
-    // Filtrar por género de habitación
-    if (filtroGenero !== 'todos' && room.genero !== filtroGenero) return false;
-
-    // Filtrar por búsqueda
-    if (searchTerm) {
-      const matchesRoom = room.numero.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesGuest = room.ocupantes.some(dni => {
-        const acampante = getAcampanteInfo(dni);
-        return acampante?.nombre.toLowerCase().includes(searchTerm.toLowerCase());
-      });
-      return matchesRoom || matchesGuest;
-    }
-
-    return true;
+  const habitacionesFiltradas = habitaciones.filter(habitacion => {
+    if (filtroGenero === 'todos') return true;
+    if (filtroGenero === 'mixta') return habitacion.genero === 'mixta';
+    return habitacion.genero === filtroGenero;
   });
 
-  // Obtener estadísticas
+  // Filtrar acampantes sin habitación
+  const acampantesFiltrados = acampantesSinHabitacion.filter(acampante => {
+    if (filtroGenero === 'todos') return true;
+    if (filtroGenero === 'mixta') return true; // Para mixta, mostrar todos
+
+    const generoAcampante = acampante.sexo.toLowerCase();
+    const generoFiltro = filtroGenero;
+
+    // Mapear género
+    if (generoAcampante.includes('masculino') && generoFiltro === 'hombre') return true;
+    if (generoAcampante.includes('femenino') && generoFiltro === 'mujer') return true;
+    return false;
+  });
+
+  // Estadísticas
   const stats = {
     totalAcampantes: acampantes.length,
-    habitacionesOcupadas: habitaciones.filter(r => r.ocupantes.length > 0).length,
-    habitacionesDisponibles: habitaciones.filter(r => r.ocupantes.length < r.capacidad).length,
-    unassigned: getUnassignedAcampantes().length,
-    ocupacionTotal: habitaciones.reduce((acc, room) => acc + room.ocupantes.length, 0),
-    capacidadTotal: habitaciones.reduce((acc, room) => acc + room.capacidad, 0)
+    totalHabitaciones: habitaciones.length,
+    habitacionesOcupadas: habitaciones.filter(h => (h.ocupantes?.length || 0) > 0).length,
+    habitacionesDisponibles: habitaciones.filter(h => (h.ocupantes?.length || 0) < h.capacidad).length,
+    acampantesAsignados: habitaciones.reduce((acc, h) => acc + (h.ocupantes?.length || 0), 0),
+    acampantesSinAsignar: acampantesSinHabitacion.length
   };
 
   if (loading) {
@@ -789,715 +824,394 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante }) => {
     <div className="space-y-6 pb-24 max-w-7xl mx-auto">
       {/* Header */}
       <div className="bg-gradient-to-br from-emerald-50 to-white p-6 rounded-3xl border-2 border-slate-200">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-          <div>
-            <h1 className="text-4xl font-black text-slate-900">Room Assignments</h1>
-            <p className="text-slate-600 font-semibold mt-2">
-              Manage occupancy for {acampantes.length} camp participants
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <button className="px-5 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold transition-all flex items-center gap-2">
-              <Download className="w-5 h-5" />
-              Generate Report
-            </button>
-            <button
-              onClick={() => setShowUnassigned(true)}
-              className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all flex items-center gap-2"
-            >
-              <Users className="w-5 h-5" />
-              Assign Guests
-            </button>
-          </div>
-        </div>
+        <h1 className="text-4xl font-black text-slate-900">Asignación de Habitaciones</h1>
+        <p className="text-slate-600 font-semibold mt-2">
+          Arrastra acampantes a las habitaciones • {acampantes.length} participantes
+        </p>
       </div>
 
-      {/* Barra de búsqueda */}
-      <div className="bg-white rounded-2xl p-4 border-2 border-slate-200 shadow-lg">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search rooms or guests..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 font-semibold"
-          />
-        </div>
-      </div>
-
-      {/* Estadísticas globales */}
+      {/* Estadísticas */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <Users className="w-5 h-5 text-emerald-600" />
-            <p className="text-slate-600 text-sm font-medium">Total Participants</p>
-          </div>
-          <p className="text-3xl font-black text-slate-900">{stats.totalAcampantes}</p>
+        <div className="bg-white rounded-2xl p-4 border-2 border-slate-200">
+          <p className="text-sm text-slate-600 font-medium">Total Acampantes</p>
+          <p className="text-2xl font-black text-slate-900">{stats.totalAcampantes}</p>
         </div>
-
-        <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <Building2 className="w-5 h-5 text-blue-600" />
-            <p className="text-slate-600 text-sm font-medium">Rooms Occupied</p>
-          </div>
-          <p className="text-3xl font-black text-slate-900">{stats.habitacionesOcupadas}</p>
+        <div className="bg-white rounded-2xl p-4 border-2 border-slate-200">
+          <p className="text-sm text-slate-600 font-medium">Asignados</p>
+          <p className="text-2xl font-black text-emerald-600">{stats.acampantesAsignados}</p>
         </div>
-
-        <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <Building2 className="w-5 h-5 text-emerald-600" />
-            <p className="text-slate-600 text-sm font-medium">Available Rooms</p>
-          </div>
-          <p className="text-3xl font-black text-slate-900">{stats.habitacionesDisponibles}</p>
+        <div className="bg-white rounded-2xl p-4 border-2 border-orange-200">
+          <p className="text-sm text-slate-600 font-medium">Sin Asignar</p>
+          <p className="text-2xl font-black text-orange-600">{stats.acampantesSinAsignar}</p>
         </div>
-
-        <div className="bg-white rounded-2xl p-6 border-2 border-orange-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle className="w-5 h-5 text-orange-600" />
-            <p className="text-slate-600 text-sm font-medium">Unassigned</p>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <p className="text-3xl font-black text-orange-600">{stats.unassigned}</p>
-            <span className="text-xs font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
-              Needs assignment
-            </span>
-          </div>
+        <div className="bg-white rounded-2xl p-4 border-2 border-blue-200">
+          <p className="text-sm text-slate-600 font-medium">Habitaciones</p>
+          <p className="text-2xl font-black text-blue-600">{stats.totalHabitaciones}</p>
         </div>
       </div>
 
-      {/* Barra de progreso y filtros */}
-      <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 shadow-lg">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex-1 max-w-md">
-            <div className="flex justify-between mb-2">
-              <p className="text-slate-900 text-sm font-bold">Overall Occupancy</p>
-              <p className="text-emerald-600 text-sm font-black">
-                {stats.ocupacionTotal} / {stats.capacidadTotal}
-              </p>
-            </div>
-            <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
-              <div
-                className="h-full bg-emerald-500 transition-all duration-300"
-                style={{ width: `${(stats.ocupacionTotal / stats.capacidadTotal) * 100}%` }}
-              />
-            </div>
-            <p className="text-slate-400 text-xs mt-1 font-semibold uppercase tracking-wider">
-              {Math.round((stats.ocupacionTotal / stats.capacidadTotal) * 100)}% capacity
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setFiltroGenero('todos')}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${filtroGenero === 'todos'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-            >
-              All Genders
-            </button>
-            <button
-              onClick={() => setFiltroGenero('hombre')}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${filtroGenero === 'hombre'
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-            >
-              Men Only
-            </button>
-            <button
-              onClick={() => setFiltroGenero('mujer')}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${filtroGenero === 'mujer'
-                ? 'bg-pink-600 text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-            >
-              Women Only
-            </button>
-
-            <div className="w-px h-6 bg-slate-300 mx-1" />
-
-            <button
-              onClick={() => setFiltroPiso('todos')}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${filtroPiso === 'todos'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-            >
-              All Floors
-            </button>
-            {['1', '2', '3'].map(piso => (
-              <button
-                key={piso}
-                onClick={() => setFiltroPiso(piso)}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${filtroPiso === piso
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-              >
-                Floor {piso}
-              </button>
-            ))}
-          </div>
+      {/* Filtros */}
+      <div className="bg-white rounded-2xl p-4 border-2 border-slate-200">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setFiltroGenero('todos')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold ${filtroGenero === 'todos' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+          >
+            Todos
+          </button>
+          <button
+            onClick={() => setFiltroGenero('hombre')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold ${filtroGenero === 'hombre' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+          >
+            Hombres
+          </button>
+          <button
+            onClick={() => setFiltroGenero('mujer')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold ${filtroGenero === 'mujer' ? 'bg-pink-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+          >
+            Mujeres
+          </button>
+          <button
+            onClick={() => setFiltroGenero('mixta')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold ${filtroGenero === 'mixta' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+          >
+            Mixtas
+          </button>
         </div>
       </div>
 
-      {/* Grid de habitaciones */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredRooms.map((room) => {
-          const isFull = room.ocupantes.length >= room.capacidad;
-          const isEmpty = room.ocupantes.length === 0;
-          const ocupacion = `${room.ocupantes.length}/${room.capacidad}`;
+      {/* Área de arrastre */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Columna 1: Acampantes sin habitación */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+            <Users className="w-5 h-5" />
+            Acampantes sin habitación ({acampantesFiltrados.length})
+          </h3>
 
-          return (
-            <div
-              key={room.id}
-              className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden flex flex-col group transition-all ${isFull
-                ? 'border-emerald-300'
-                : isEmpty
-                  ? 'border-slate-300'
-                  : 'border-blue-300 hover:border-blue-500'
-                }`}
-            >
-              {/* Header de la habitación */}
-              <div className={`p-5 border-b-2 flex justify-between items-start ${isFull
-                ? 'bg-emerald-50 border-emerald-200'
-                : isEmpty
-                  ? 'bg-slate-50 border-slate-200'
-                  : 'bg-blue-50 border-blue-200'
-                }`}>
-                <div>
-                  <h3 className="text-xl font-black text-slate-900">Room {room.numero}</h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs font-bold text-emerald-600 uppercase tracking-tight">
-                      {room.tipo}
-                    </span>
-                    <span className="text-xs text-slate-500">•</span>
-                    <span className="text-xs text-slate-500 font-semibold">
-                      Floor {room.piso}
-                    </span>
-                    <span className="text-xs text-slate-500">•</span>
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${room.genero === 'hombre'
-                      ? 'bg-blue-100 text-blue-700'
-                      : room.genero === 'mujer'
-                        ? 'bg-pink-100 text-pink-700'
-                        : 'bg-purple-100 text-purple-700'
-                      }`}>
-                      {room.genero === 'hombre' ? 'Men' : room.genero === 'mujer' ? 'Women' : 'Mixed'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-end">
-                  {!isEmpty && (
-                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-black mb-1 ${isFull
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-blue-100 text-blue-700'
-                      }`}>
-                      {ocupacion} BEDS
-                    </span>
-                  )}
-
-                  {!isEmpty && (
-                    <div className="flex -space-x-2">
-                      {room.ocupantes.slice(0, 3).map((dni, idx) => {
-                        const acampante = getAcampanteInfo(dni);
-                        return (
-                          <div
-                            key={idx}
-                            onClick={() => onSelectAcampante(acampante)}
-                            className="w-6 h-6 rounded-full border-2 border-white bg-slate-300 flex items-center justify-center text-xs font-bold text-slate-700 cursor-pointer hover:scale-110 transition-transform"
-                            title={acampante?.nombre}
-                          >
-                            {acampante?.nombre?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                          </div>
-                        );
-                      })}
-                      {room.ocupantes.length > 3 && (
-                        <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600">
-                          +{room.ocupantes.length - 3}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Lista de huéspedes */}
-              <div className="p-5 flex-1 space-y-3">
-                {isEmpty ? (
-                  <div className="flex flex-col items-center justify-center py-8 space-y-3 opacity-60">
-                    <Building2 className="w-12 h-12 text-slate-400" />
-                    <p className="text-sm font-bold text-center text-slate-500">
-                      No guests assigned yet
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {room.ocupantes.map((dni, idx) => {
-                      const acampante = getAcampanteInfo(dni);
-                      if (!acampante) return null;
-
-                      return (
-                        <div
-                          key={idx}
-                          onClick={() => onSelectAcampante(acampante)}
-                          className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors group"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold ${acampante.presente
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-slate-100 text-slate-700'
-                              }`}>
-                              {acampante.nombre.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                            </div>
-                            <div>
-                              <p className="text-sm font-bold text-slate-900">{acampante.nombre}</p>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-slate-500 font-semibold">
-                                  {acampante.sexo === 'Masculino' ? 'MALE' : 'FEMALE'}
-                                </span>
-                                <span className="text-[10px] text-slate-300">•</span>
-                                <span className="text-[10px] text-slate-500 font-semibold">
-                                  {acampante.edad} years
-                                </span>
-                                {acampante.presente && (
-                                  <>
-                                    <span className="text-[10px] text-slate-300">•</span>
-                                    <span className="text-[10px] font-bold text-emerald-600">
-                                      ✓ Present
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeFromRoom(dni, room.id);
-                            }}
-                            className="text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
-                          >
-                            <X className="w-5 h-5" />
-                          </button>
-                        </div>
-                      );
-                    })}
-
-                    {!isFull && (
-                      <div className="pt-2">
-                        <button
-                          onClick={() => setSelectedGuest(room.id)}
-                          className="w-full border-2 border-dashed border-slate-300 rounded-lg py-2 text-slate-400 text-xs font-bold hover:border-emerald-500 hover:text-emerald-500 transition-all flex items-center justify-center gap-2"
-                        >
-                          <Plus className="w-4 h-4" />
-                          Add Guest
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Footer de la habitación */}
-              <div className="p-3 bg-slate-50 flex gap-2 border-t border-slate-200">
-                <button
-                  onClick={() => setEditingRoom(room)}
-                  className="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-700 hover:border-emerald-500 transition-colors"
-                >
-                  Edit Room
-                </button>
-                <button className="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-700 hover:border-emerald-500 transition-colors">
-                  View Logs
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Modal para asignar huésped */}
-      {selectedGuest && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-black text-slate-900">Assign Guest to Room {selectedGuest}</h3>
-              <button onClick={() => setSelectedGuest(null)} className="text-slate-400 hover:text-slate-700">
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <p className="text-slate-600 text-sm mb-4">
-                Select a guest to assign to this room:
-              </p>
-
-              <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                {getUnassignedAcampantes().map(acampante => (
+          <div className="bg-white rounded-2xl p-4 border-2 border-orange-200 max-h-[500px] overflow-y-auto">
+            {acampantesFiltrados.length > 0 ? (
+              <div className="space-y-2">
+                {acampantesFiltrados.map(acampante => (
                   <div
                     key={acampante.dni}
-                    onClick={() => assignToRoom(acampante.dni, selectedGuest)}
-                    className="flex items-center justify-between p-4 rounded-xl border-2 border-slate-200 hover:border-emerald-500 cursor-pointer transition-all hover:bg-slate-50"
+                    draggable
+                    onDragStart={(e) => {
+                      setDraggedAcampante(acampante);
+                      e.dataTransfer.setData('text/plain', acampante.dni);
+                    }}
+                    onClick={() => onSelectAcampante(acampante)}
+                    className="p-3 rounded-lg border-2 border-slate-200 hover:border-emerald-500 cursor-pointer hover:bg-slate-50 transition-all"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
-                        <User className="w-7 h-7 text-white" strokeWidth={2.5} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-black text-slate-900">{acampante.nombre}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-slate-500 font-semibold">DNI: {acampante.dni}</span>
-                          <span className="text-xs text-slate-300">•</span>
-                          <span className="text-xs text-slate-500 font-semibold">
-                            {acampante.sexo === 'Masculino' ? 'MALE' : 'FEMALE'}
-                          </span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center">
+                          <User className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900">{acampante.nombre}</p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-500">DNI: {acampante.dni}</span>
+                            <span className="text-xs text-slate-300">•</span>
+                            <span className="text-xs text-slate-500">
+                              {acampante.sexo === 'Masculino' ? 'Hombre' : 'Mujer'}
+                            </span>
+                          </div>
                         </div>
                       </div>
+                      <span className="text-xs font-bold text-orange-600 bg-orange-100 px-2 py-1 rounded">
+                        Sin asignar
+                      </span>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
                   </div>
                 ))}
               </div>
-
-              {getUnassignedAcampantes().length === 0 && (
-                <div className="text-center py-8">
-                  <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500 font-semibold">All guests are assigned to rooms</p>
-                </div>
-              )}
-            </div>
+            ) : (
+              <div className="text-center py-8">
+                <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500 font-semibold">Todos los acampantes están asignados</p>
+              </div>
+            )}
           </div>
         </div>
-      )}
 
-      {/* Modal para editar habitación */}
-      {editingRoom && (
-        <EditRoomModal
-          room={editingRoom}
-          onClose={() => setEditingRoom(null)}
-          onSave={async (updatedRoom) => {
-            // Implementar actualización en Firebase
-            try {
-              const roomRef = doc(db, 'habitaciones', updatedRoom.id);
-              await updateDoc(roomRef, updatedRoom);
-              setHabitaciones(prev => prev.map(r =>
-                r.id === updatedRoom.id ? updatedRoom : r
-              ));
-              setEditingRoom(null);
-            } catch (error) {
-              console.error('Error updating room:', error);
-            }
-          }}
-        />
-      )}
+        {/* Columna 2: Habitaciones */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+            <Building2 className="w-5 h-5" />
+            Habitaciones ({habitacionesFiltradas.length})
+          </h3>
 
-      {/* Modal para acampantes sin asignar */}
-      {showUnassigned && (
-        <UnassignedModal
-          acampantes={getUnassignedAcampantes()}
-          habitaciones={habitaciones.filter(r => r.ocupantes.length < r.capacidad)}
-          onSelectAcampante={onSelectAcampante}
-          onAssign={(dni, roomId) => assignToRoom(dni, roomId)}
-          onClose={() => setShowUnassigned(false)}
-        />
-      )}
-
-      {/* Footer / Pagination */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 py-6 border-t border-slate-200">
-        <p className="text-slate-500 text-sm font-bold">
-          Showing {filteredRooms.length} of {habitaciones.length} rooms
-        </p>
-        <div className="flex items-center gap-2">
-          <button className="w-10 h-10 rounded-lg border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors">
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <button className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
-            1
-          </button>
-          <button className="w-10 h-10 rounded-lg border border-slate-300 flex items-center justify-center text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors">
-            2
-          </button>
-          <button className="w-10 h-10 rounded-lg border border-slate-300 flex items-center justify-center text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors">
-            3
-          </button>
-          <button className="w-10 h-10 rounded-lg border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors">
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Botón flotante de acción rápida */}
-      <div className="fixed bottom-8 right-8">
-        <button
-          onClick={() => setShowUnassigned(true)}
-          className="w-14 h-14 bg-emerald-600 text-white rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition-transform group relative"
-        >
-          <Plus className="w-7 h-7" />
-          <span className="absolute right-full mr-4 bg-slate-900 text-white text-xs px-3 py-1.5 rounded-lg font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
-            QUICK ASSIGN
-          </span>
-        </button>
-      </div>
-    </div>
-  );
-};
-const EditRoomModal = ({ room, onClose, onSave }) => {
-  const [formData, setFormData] = useState(room);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSave(formData);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-black text-slate-900">Edit Room {room.numero}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <label className="block text-sm font-bold text-slate-700">Room Number</label>
-            <input
-              type="text"
-              value={formData.numero}
-              onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
-              className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-emerald-500 font-semibold"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="block text-sm font-bold text-slate-700">Floor</label>
-              <select
-                value={formData.piso}
-                onChange={(e) => setFormData({ ...formData, piso: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-emerald-500 font-semibold"
-              >
-                <option value="1">Floor 1</option>
-                <option value="2">Floor 2</option>
-                <option value="3">Floor 3</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-bold text-slate-700">Capacity</label>
-              <select
-                value={formData.capacidad}
-                onChange={(e) => setFormData({ ...formData, capacidad: parseInt(e.target.value) })}
-                className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-emerald-500 font-semibold"
-              >
-                <option value="2">2 Beds</option>
-                <option value="4">4 Beds</option>
-                <option value="6">6 Beds</option>
-                <option value="8">8 Beds</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-bold text-slate-700">Room Type</label>
-            <select
-              value={formData.tipo}
-              onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
-              className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-emerald-500 font-semibold"
-            >
-              <option value="Standard">Standard</option>
-              <option value="Deluxe">Deluxe</option>
-              <option value="Suite">Suite</option>
-              <option value="Carpa">Tent</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-bold text-slate-700">Gender</label>
-            <div className="flex gap-3">
-              {['mixta', 'hombre', 'mujer'].map(gender => (
-                <button
-                  key={gender}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, genero: gender })}
-                  className={`flex-1 px-4 py-3 rounded-xl border-2 font-bold transition-all ${formData.genero === gender
-                    ? gender === 'hombre' ? 'bg-blue-100 text-blue-700 border-blue-300'
-                      : gender === 'mujer' ? 'bg-pink-100 text-pink-700 border-pink-300'
-                        : 'bg-purple-100 text-purple-700 border-purple-300'
-                    : 'bg-slate-100 text-slate-700 border-slate-300'
-                    }`}
-                >
-                  {gender === 'hombre' ? 'Men Only' : gender === 'mujer' ? 'Women Only' : 'Mixed'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-3 border-2 border-slate-300 rounded-xl text-slate-700 font-bold hover:bg-slate-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors"
-            >
-              Save Changes
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-const UnassignedModal = ({ acampantes, habitaciones, onSelectAcampante, onAssign, onClose }) => {
-  const [selectedAcampante, setSelectedAcampante] = useState(null);
-
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl p-6 max-w-4xl w-full max-h-[80vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-2xl font-black text-slate-900">Unassigned Guests</h3>
-            <p className="text-slate-600 font-semibold mt-1">
-              {acampantes.length} guests need room assignment
-            </p>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Lista de acampantes sin asignar */}
-          <div className="space-y-4">
-            <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">Unassigned Guests</h4>
-            <div className="space-y-3 max-h-[400px] overflow-y-auto">
-              {acampantes.map(acampante => (
-                <div
-                  key={acampante.dni}
-                  onClick={() => {
-                    setSelectedAcampante(acampante);
-                    onSelectAcampante(acampante);
-                  }}
-                  className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedAcampante?.dni === acampante.dni
-                    ? 'border-emerald-500 bg-emerald-50'
-                    : 'border-slate-200 hover:border-emerald-500 hover:bg-slate-50'
-                    }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg">
-                      <User className="w-7 h-7 text-white" strokeWidth={2.5} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-slate-900">{acampante.nombre}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-slate-500 font-semibold">DNI: {acampante.dni}</span>
-                        <span className="text-xs text-slate-300">•</span>
-                        <span className="text-xs text-slate-500 font-semibold">
-                          {acampante.sexo === 'Masculino' ? 'MALE' : 'FEMALE'}
-                        </span>
-                        <span className="text-xs text-slate-300">•</span>
-                        <span className="text-xs text-slate-500 font-semibold">
-                          {acampante.edad} years
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-slate-400" />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Habitaciones disponibles para asignar */}
-          <div className="space-y-4">
-            <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">Available Rooms</h4>
-            <div className="space-y-3 max-h-[400px] overflow-y-auto">
-              {habitaciones.map(room => {
-                const availableBeds = room.capacidad - room.ocupantes.length;
-                const isCompatible = !selectedAcampante ||
-                  room.genero == 'mixta' ||
-                  room.genero == (selectedAcampante.sexo === 'Masculino' ? 'hombre' : 'mujer');
+          <div className="bg-white rounded-2xl p-4 border-2 border-slate-200 max-h-[500px] overflow-y-auto">
+            <div className="space-y-4">
+              {habitacionesFiltradas.map(habitacion => {
+                const ocupantesActuales = habitacion.ocupantes?.length || 0;
+                const disponible = ocupantesActuales < habitacion.capacidad;
+                const porcentaje = (ocupantesActuales / habitacion.capacidad) * 100;
 
                 return (
                   <div
-                    key={room.id}
-                    onClick={() => selectedAcampante && isCompatible && onAssign(selectedAcampante.dni, room.id)}
-                    className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${!selectedAcampante
-                      ? 'border-slate-200 opacity-50 cursor-not-allowed'
-                      : !isCompatible
-                        ? 'border-red-200 bg-red-50 cursor-not-allowed'
-                        : 'border-emerald-200 hover:border-emerald-500 hover:bg-emerald-50 cursor-pointer'
+                    key={habitacion.id}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (disponible) {
+                        setTargetHabitacion(habitacion.id);
+                      }
+                    }}
+                    onDragLeave={() => setTargetHabitacion(null)}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      if (draggedAcampante && disponible) {
+                        await asignarAcampante(draggedAcampante.dni, habitacion.id);
+                      }
+                      setTargetHabitacion(null);
+                    }}
+                    className={`p-4 rounded-xl border-2 transition-all ${targetHabitacion === habitacion.id && disponible
+                      ? 'border-emerald-500 bg-emerald-50'
+                      : disponible
+                        ? 'border-slate-200 hover:border-emerald-300'
+                        : 'border-red-200 bg-red-50'
                       }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${!isCompatible ? 'bg-red-100' : 'bg-emerald-100'
-                        }`}>
-                        <Building2 className={`w-7 h-7 ${!isCompatible ? 'text-red-600' : 'text-emerald-600'
-                          }`} strokeWidth={2.5} />
-                      </div>
+                    <div className="flex items-center justify-between mb-3">
                       <div>
-                        <p className="text-sm font-black text-slate-900">Room {room.numero}</p>
+                        <h4 className="font-black text-slate-900">Habitación {habitacion.numero}</h4>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-slate-500 font-semibold">
-                            {availableBeds} beds available
-                          </span>
+                          <span className="text-xs text-slate-500">Piso {habitacion.piso}</span>
                           <span className="text-xs text-slate-300">•</span>
-                          <span className="text-xs text-slate-500 font-semibold">
-                            Floor {room.piso}
-                          </span>
+                          <span className="text-xs text-slate-500">{habitacion.tipo}</span>
                           <span className="text-xs text-slate-300">•</span>
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${room.genero === 'hombre'
-                            ? 'bg-blue-100 text-blue-700'
-                            : room.genero === 'mujer'
-                              ? 'bg-pink-100 text-pink-700'
-                              : 'bg-purple-100 text-purple-700'
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${habitacion.genero === 'hombre' ? 'bg-blue-100 text-blue-700' :
+                            habitacion.genero === 'mujer' ? 'bg-pink-100 text-pink-700' :
+                              'bg-purple-100 text-purple-700'
                             }`}>
-                            {room.genero === 'hombre' ? 'Men' : room.genero === 'mujer' ? 'Women' : 'Mixed'}
+                            {habitacion.genero === 'hombre' ? 'Solo hombres' :
+                              habitacion.genero === 'mujer' ? 'Solo mujeres' : 'Mixta'}
                           </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-sm font-bold ${disponible ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {ocupantesActuales}/{habitacion.capacidad}
+                        </span>
+                        <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden mt-1">
+                          <div
+                            className={`h-full ${disponible ? 'bg-emerald-500' : 'bg-red-500'}`}
+                            style={{ width: `${Math.min(porcentaje, 100)}%` }}
+                          />
                         </div>
                       </div>
                     </div>
 
-                    {!isCompatible && selectedAcampante && (
-                      <span className="text-xs font-bold text-red-600">
-                        No coincide género
-                      </span>
-                    )}
+                    {/* Ocupantes */}
+                    <div className="space-y-2">
+                      {habitacion.ocupantes?.map(dni => {
+                        const acampante = acampantes.find(a => a.dni === dni);
+                        if (!acampante) return null;
 
-                    {isCompatible && selectedAcampante && (
-                      <button className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors">
-                        Assign
-                      </button>
-                    )}
+                        return (
+                          <div
+                            key={dni}
+                            className="flex items-center justify-between p-2 rounded-lg bg-slate-50"
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-gradient-to-br from-slate-500 to-slate-600 rounded-lg flex items-center justify-center">
+                                <span className="text-xs font-bold text-white">
+                                  {acampante.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                </span>
+                              </div>
+                              <span className="text-sm font-medium text-slate-900">
+                                {acampante.nombre.split(' ')[0]}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => quitarAcampante(dni, habitacion.id)}
+                              className="text-slate-400 hover:text-red-600"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
+
+                      {disponible && (
+                        <div className="pt-2">
+                          <div className="border-2 border-dashed border-slate-300 rounded-lg p-3 text-center">
+                            <p className="text-sm text-slate-500">
+                              {targetHabitacion === habitacion.id && draggedAcampante
+                                ? `Soltar aquí para asignar a ${draggedAcampante.nombre}`
+                                : 'Arrastra un acampante aquí'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
             </div>
           </div>
         </div>
+      </div>
 
-        {selectedAcampante && (
-          <div className="mt-6 p-4 bg-slate-50 rounded-xl border-2 border-slate-200">
-            <p className="text-sm font-bold text-slate-900">
-              Selected: <span className="text-emerald-600">{selectedAcampante.nombre}</span>
-            </p>
-            <p className="text-xs text-slate-500 mt-1">
-              Click on an available room to assign this guest
+      {/* Instrucciones */}
+      <div className="bg-white rounded-2xl p-4 border-2 border-slate-200">
+        <div className="flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-blue-600" />
+          <div>
+            <p className="font-bold text-slate-900">Instrucciones:</p>
+            <p className="text-sm text-slate-600">
+              1. Arrastra un acampante desde la columna izquierda a una habitación disponible.
+              2. Las habitaciones se filtran por género automáticamente.
+              3. Haz clic en la ✕ para quitar a un acampante de una habitación.
             </p>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
 };
+
+
+return (
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="bg-white rounded-2xl p-6 max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="text-2xl font-black text-slate-900">Unassigned Guests</h3>
+          <p className="text-slate-600 font-semibold mt-1">
+            {acampantes.length} guests need room assignment
+          </p>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
+          <X className="w-6 h-6" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Lista de acampantes sin asignar */}
+        <div className="space-y-4">
+          <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">Unassigned Guests</h4>
+          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            {acampantes.map(acampante => (
+              <div
+                key={acampante.dni}
+                onClick={() => {
+                  setSelectedAcampante(acampante);
+                  onSelectAcampante(acampante);
+                }}
+                className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedAcampante?.dni === acampante.dni
+                  ? 'border-emerald-500 bg-emerald-50'
+                  : 'border-slate-200 hover:border-emerald-500 hover:bg-slate-50'
+                  }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <User className="w-7 h-7 text-white" strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-black text-slate-900">{acampante.nombre}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-slate-500 font-semibold">DNI: {acampante.dni}</span>
+                      <span className="text-xs text-slate-300">•</span>
+                      <span className="text-xs text-slate-500 font-semibold">
+                        {acampante.sexo === 'Masculino' ? 'MALE' : 'FEMALE'}
+                      </span>
+                      <span className="text-xs text-slate-300">•</span>
+                      <span className="text-xs text-slate-500 font-semibold">
+                        {acampante.edad} years
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-slate-400" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Habitaciones disponibles para asignar */}
+        <div className="space-y-4">
+          <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">Available Rooms</h4>
+          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            {habitaciones.map(room => {
+              const availableBeds = room.capacidad - room.ocupantes.length;
+              const isCompatible = !selectedAcampante ||
+                room.genero == 'mixta' ||
+                room.genero == (selectedAcampante.sexo === 'Masculino' ? 'hombre' : 'mujer');
+
+              return (
+                <div
+                  key={room.id}
+                  onClick={() => selectedAcampante && isCompatible && onAssign(selectedAcampante.dni, room.id)}
+                  className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${!selectedAcampante
+                    ? 'border-slate-200 opacity-50 cursor-not-allowed'
+                    : !isCompatible
+                      ? 'border-red-200 bg-red-50 cursor-not-allowed'
+                      : 'border-emerald-200 hover:border-emerald-500 hover:bg-emerald-50 cursor-pointer'
+                    }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${!isCompatible ? 'bg-red-100' : 'bg-emerald-100'
+                      }`}>
+                      <Building2 className={`w-7 h-7 ${!isCompatible ? 'text-red-600' : 'text-emerald-600'
+                        }`} strokeWidth={2.5} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-slate-900">Room {room.numero}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-slate-500 font-semibold">
+                          {availableBeds} beds available
+                        </span>
+                        <span className="text-xs text-slate-300">•</span>
+                        <span className="text-xs text-slate-500 font-semibold">
+                          Floor {room.piso}
+                        </span>
+                        <span className="text-xs text-slate-300">•</span>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${room.genero === 'hombre'
+                          ? 'bg-blue-100 text-blue-700'
+                          : room.genero === 'mujer'
+                            ? 'bg-pink-100 text-pink-700'
+                            : 'bg-purple-100 text-purple-700'
+                          }`}>
+                          {room.genero === 'hombre' ? 'Men' : room.genero === 'mujer' ? 'Women' : 'Mixed'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {!isCompatible && selectedAcampante && (
+                    <span className="text-xs font-bold text-red-600">
+                      No coincide género
+                    </span>
+                  )}
+
+                  {isCompatible && selectedAcampante && (
+                    <button className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors">
+                      Assign
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {selectedAcampante && (
+        <div className="mt-6 p-4 bg-slate-50 rounded-xl border-2 border-slate-200">
+          <p className="text-sm font-bold text-slate-900">
+            Selected: <span className="text-emerald-600">{selectedAcampante.nombre}</span>
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            Click on an available room to assign this guest
+          </p>
+        </div>
+      )}
+    </div>
+  </div>
+);
+
 const SearchView = ({ acampantes, onSelectAcampante }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -1982,7 +1696,7 @@ export default function AvivaApp() {
           <HabitacionesMejoradas
             acampantes={acampantes}
             onSelectAcampante={setSelectedAcampante}
-            onUpdateHabitacion={handleUpdateHabitacion}
+
           />
         )}
         {activeTab === 'busqueda' && (
