@@ -1124,10 +1124,14 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, setNotification 
 const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
   const [grupos, setGrupos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showCrearGrupo, setShowCrearGrupo] = useState(false);
-  const [acampanteSeleccionado, setAcampanteSeleccionado] = useState(null);
-  const [codigoAcceso, setCodigoAcceso] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState(null);
   const [mostrandoVistaLider, setMostrandoVistaLider] = useState(false);
+  const [viewMode, setViewMode] = useState('lista'); // 'lista', 'detalle', 'lider'
+  const [codigoIngresado, setCodigoIngresado] = useState('');
+  const [grupoLider, setGrupoLider] = useState(null);
+  const [nuevaTarea, setNuevaTarea] = useState('');
+  const [filtroActividad, setFiltroActividad] = useState('todas');
 
   // Cargar grupos
   useEffect(() => {
@@ -1136,12 +1140,21 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
 
   const loadGrupos = async () => {
     try {
+      setLoading(true);
       const querySnapshot = await getDocs(collection(db, 'grupos_pequenos'));
       const gruposData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      setGrupos(gruposData);
+
+      // Procesar grupos para incluir miembros de campo "grupo"
+      const gruposProcesados = await procesarMiembrosDeCampo(gruposData);
+      setGrupos(gruposProcesados);
+
+      setNotification({
+        type: 'success',
+        message: `${gruposProcesados.length} grupos cargados`
+      });
     } catch (error) {
       console.error('Error cargando grupos:', error);
       setNotification({
@@ -1153,43 +1166,167 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
     }
   };
 
-  // Función para crear grupo de WhatsApp
-  const crearGrupoWhatsApp = (grupo) => {
-    const lider = acampantes.find(a => a.dni === grupo.lider_id);
-    const miembrosNumeros = grupo.miembros
-      .map(dni => {
-        const acampante = acampantes.find(a => a.dni === dni);
-        return acampante?.telefono;
-      })
-      .filter(tel => tel)
-      .map(tel => tel.replace(/\D/g, '')); // Quitar caracteres no numéricos
+  // Función para procesar acampantes del campo "grupo"
+  const procesarMiembrosDeCampo = async (gruposData) => {
+    return gruposData.map(grupo => {
+      // Buscar acampantes que tengan este grupo en el campo "grupo"
+      const miembrosDelCampo = acampantes
+        .filter(acampante => {
+          // Limpiar y comparar (puede tener espacios)
+          const grupoAcampante = (acampante.grupo || '').trim();
+          const grupoId = grupo.id.trim();
+          return grupoAcampante === grupoId && !grupo.miembros?.includes(acampante.dni);
+        })
+        .map(acampante => acampante.dni);
 
-    // Crear link para mensaje individual con todos los números
-    const numerosTexto = miembrosNumeros.join(',');
-    const mensaje = `*${grupo.nombre} - AVIVA CAMP 2026*%0A%0AHola equipo! Este es nuestro grupo de WhatsApp para coordinar nuestras actividades.`;
-
-    const whatsappLink = `https://wa.me/?text=${mensaje}`;
-
-    // Abrir en nueva pestaña
-    window.open(whatsappLink, '_blank');
-
-    setNotification({
-      type: 'info',
-      message: 'Preparando grupo de WhatsApp...'
+      // Si hay nuevos miembros, actualizar el array (pero no guardar en Firestore todavía)
+      if (miembrosDelCampo.length > 0) {
+        return {
+          ...grupo,
+          miembros: [...(grupo.miembros || []), ...miembrosDelCampo],
+          miembrosAutomaticos: miembrosDelCampo,
+          miembrosOriginales: grupo.miembros || []
+        };
+      }
+      return grupo;
     });
   };
 
-  // Vista de líder con código de acceso
-  const VistaLider = () => {
-    const [codigoIngresado, setCodigoIngresado] = useState('');
-    const [grupoLider, setGrupoLider] = useState(null);
-    const [accesoConcedido, setAccesoConcedido] = useState(false);
+  // Función para sincronizar miembros automáticamente
+  const sincronizarMiembros = async () => {
+    try {
+      setNotification({
+        type: 'info',
+        message: 'Sincronizando miembros...'
+      });
 
+      const gruposActualizados = await Promise.all(
+        grupos.map(async (grupo) => {
+          const miembrosDelCampo = acampantes
+            .filter(acampante => {
+              const grupoAcampante = (acampante.grupo || '').trim();
+              const grupoId = grupo.id.trim();
+              return grupoAcampante === grupoId;
+            })
+            .map(acampante => acampante.dni);
+
+          const todosMiembros = [...new Set([...(grupo.miembros || []), ...miembrosDelCampo])];
+
+          // Si hay cambios, actualizar en Firestore
+          if (todosMiembros.length !== (grupo.miembros?.length || 0)) {
+            const grupoRef = doc(db, 'grupos_pequenos', grupo.id);
+            await updateDoc(grupoRef, {
+              miembros: todosMiembros,
+              ultima_sincronizacion: serverTimestamp()
+            });
+
+            return {
+              ...grupo,
+              miembros: todosMiembros,
+              miembrosAutomaticos: miembrosDelCampo,
+              miembrosOriginales: grupo.miembros || []
+            };
+          }
+          return grupo;
+        })
+      );
+
+      setGrupos(gruposActualizados);
+      setNotification({
+        type: 'success',
+        message: '✓ Miembros sincronizados correctamente'
+      });
+    } catch (error) {
+      console.error('Error sincronizando miembros:', error);
+      setNotification({
+        type: 'error',
+        message: '✗ Error al sincronizar miembros'
+      });
+    }
+  };
+
+  // Función mejorada para crear grupo de WhatsApp
+  const crearGrupoWhatsApp = (grupo) => {
+    const lider = acampantes.find(a => a.dni === grupo.lider_id);
+    const todosMiembros = grupo.miembros || [];
+
+    // Filtrar y limpiar números de teléfono
+    const numerosTelefono = todosMiembros
+      .map(dni => {
+        const acampante = acampantes.find(a => a.dni === dni);
+        if (!acampante?.telefono) return null;
+
+        // Limpiar número (quitar espacios, guiones, paréntesis)
+        const telefonoLimpio = acampante.telefono.replace(/[\s\-\(\)]/g, '');
+
+        // Asegurar formato internacional (Argentina)
+        if (telefonoLimpio.startsWith('15')) {
+          return `549${telefonoLimpio.substring(1)}`;
+        } else if (telefonoLimpio.startsWith('11') && telefonoLimpio.length === 10) {
+          return `549${telefonoLimpio}`;
+        } else if (telefonoLimpio.startsWith('9')) {
+          return `54${telefonoLimpio}`;
+        }
+        return telefonoLimpio;
+      })
+      .filter(num => num);
+
+    if (numerosTelefono.length === 0) {
+      setNotification({
+        type: 'error',
+        message: 'No hay números de teléfono válidos en el grupo'
+      });
+      return;
+    }
+
+    // Crear mensaje personalizado
+    const mensaje = encodeURIComponent(
+      `*${grupo.nombre} - AVIVA CAMP 2026*\n\n` +
+      `¡Hola equipo! 👋\n` +
+      `Este es nuestro grupo oficial para coordinar las actividades del campamento.\n\n` +
+      `*Líder:* ${lider?.nombre || 'Sin líder'}\n` +
+      `*Código:* ${grupo.codigo_acceso}\n` +
+      `*Color:* ${grupo.color || 'Sin color'}\n\n` +
+      `¡Nos vemos en el campamento! ⛰️✨`
+    );
+
+    // Generar link con todos los números (WhatsApp Web)
+    const numerosTexto = numerosTelefono.join(',');
+    const whatsappLink = `https://web.whatsapp.com/send?text=${mensaje}&phone=${numerosTelefono[0]}`;
+
+    // También crear link para móvil
+    const whatsappMobileLink = `https://wa.me/?text=${mensaje}`;
+
+    // Mostrar opciones
+    if (window.confirm(
+      `Crear grupo de WhatsApp para ${grupo.nombre}\n\n` +
+      `Total miembros: ${todosMiembros.length}\n` +
+      `Con teléfono: ${numerosTelefono.length}\n\n` +
+      `¿Abrir WhatsApp Web (recomendado para PC) o generar link para móvil?`
+    )) {
+      // Abrir WhatsApp Web
+      window.open(whatsappLink, '_blank');
+
+      // Copiar link móvil al portapapeles
+      navigator.clipboard.writeText(whatsappMobileLink);
+
+      setNotification({
+        type: 'success',
+        message: `✓ Grupo WhatsApp creado. Link móvil copiado al portapapeles.`
+      });
+    }
+  };
+
+  // Vista de líder
+  const VistaLider = () => {
     const verificarCodigo = () => {
-      const grupo = grupos.find(g => g.codigo_acceso === codigoIngresado);
+      const grupo = grupos.find(g =>
+        g.codigo_acceso.toLowerCase() === codigoIngresado.toLowerCase().trim()
+      );
+
       if (grupo) {
         setGrupoLider(grupo);
-        setAccesoConcedido(true);
+        setViewMode('lider-detalle');
       } else {
         setNotification({
           type: 'error',
@@ -1198,86 +1335,474 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
       }
     };
 
-    if (!accesoConcedido) {
-      return (
-        <div className="max-w-md mx-auto">
-          <div className="bg-white p-8 rounded-2xl border-2 border-slate-200">
-            <h3 className="text-xl font-black text-slate-900 mb-4">Acceso Líder</h3>
-            <p className="text-slate-600 mb-6">Ingresa el código de acceso de tu grupo</p>
+    if (viewMode === 'lider-detalle' && grupoLider) {
+      return <DetalleGrupo
+        grupo={grupoLider}
+        acampantes={acampantes}
+        onBack={() => {
+          setViewMode('lider');
+          setGrupoLider(null);
+          setCodigoIngresado('');
+        }}
+        esLider={true}
+        onSelectAcampante={onSelectAcampante}
+        setNotification={setNotification}
+      />;
+    }
+
+    return (
+      <div className="max-w-md mx-auto">
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-8 rounded-2xl border-2 border-blue-200">
+          <h3 className="text-2xl font-black text-slate-900 mb-4">🔐 Acceso Líder</h3>
+          <p className="text-slate-600 mb-6">Ingresa el código de acceso de tu grupo pequeño</p>
+
+          <div className="space-y-4">
             <input
               type="text"
               value={codigoIngresado}
               onChange={(e) => setCodigoIngresado(e.target.value)}
-              placeholder="Ej: ALFA2024"
-              className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl mb-4"
+              placeholder="Ej: 1234 o ALFA2024"
+              className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl text-center text-lg font-bold"
+              onKeyPress={(e) => e.key === 'Enter' && verificarCodigo()}
             />
+
             <button
               onClick={verificarCodigo}
-              className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold"
+              className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold text-lg shadow-lg"
             >
               Acceder a mi grupo
             </button>
-          </div>
-        </div>
-      );
-    }
 
-    // Vista del líder después de acceder
-    return (
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border-2 border-blue-200 mb-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-2xl font-black text-slate-900">{grupoLider.nombre}</h2>
-              <p className="text-blue-600 font-semibold">Vista de Líder</p>
-              <p className="text-sm text-slate-600 mt-2">Código: {grupoLider.codigo_acceso}</p>
-            </div>
             <button
-              onClick={() => crearGrupoWhatsApp(grupoLider)}
-              className="px-6 py-3 bg-green-600 text-white rounded-xl font-bold flex items-center gap-2"
+              onClick={() => {
+                setViewMode('lista');
+                setCodigoIngresado('');
+              }}
+              className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-bold border-2 border-slate-300"
             >
-              <Phone className="w-5 h-5" />
-              Crear grupo WhatsApp
+              ← Volver a la lista
             </button>
-          </div>
-        </div>
-
-        {/* Miembros del grupo */}
-        <div className="bg-white rounded-2xl p-6 border-2 border-slate-200">
-          <h3 className="text-lg font-black text-slate-900 mb-4">Miembros del grupo</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {grupoLider.miembros?.map(dni => {
-              const acampante = acampantes.find(a => a.dni === dni);
-              if (!acampante) return null;
-
-              return (
-                <div
-                  key={dni}
-                  onClick={() => onSelectAcampante(acampante)}
-                  className="flex items-center justify-between p-4 rounded-xl border-2 border-slate-200 hover:border-emerald-500 cursor-pointer hover:bg-slate-50 transition-all"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-slate-100 to-slate-200 rounded-xl flex items-center justify-center">
-                      <User className="w-5 h-5 text-slate-600" strokeWidth={2} />
-                    </div>
-                    <span className="text-sm font-bold text-slate-900">{acampante.nombre}</span>
-                  </div>
-                  {acampante.telefono && (
-                    <a
-                      href={`tel:${acampante.telefono}`}
-                      className="text-blue-600 hover:text-blue-800"
-                    >
-                      <Phone className="w-4 h-4" />
-                    </a>
-                  )}
-                </div>
-              );
-            })}
           </div>
         </div>
       </div>
     );
   };
+
+  // Detalle de grupo (compartido para líder y admin)
+  const DetalleGrupo = ({ grupo, acampantes, onBack, esLider = false, onSelectAcampante, setNotification }) => {
+    const [tareas, setTareas] = useState(grupo.tareas || []);
+    const [nuevaTarea, setNuevaTarea] = useState('');
+    const [filtroTareas, setFiltroTareas] = useState('todas');
+
+    const lider = acampantes.find(a => a.dni === grupo.lider_id);
+    const miembrosConInfo = (grupo.miembros || [])
+      .map(dni => acampantes.find(a => a.dni === dni))
+      .filter(Boolean);
+
+    // Actividades por día (ejemplo)
+    const actividadesPorDia = [
+      {
+        dia: 1,
+        fecha: "Viernes 16/01",
+        actividades: [
+          { hora: "09:00", titulo: "Recepción y acomodación", ubicacion: "Recepción principal", completada: true },
+          { hora: "11:00", titulo: "Presentación del grupo", ubicacion: "Sala de talleres", completada: true },
+          { hora: "14:00", titulo: "Actividad rompehielos", ubicacion: "Campo deportivo", completada: false },
+          { hora: "16:00", titulo: "Taller de integración", ubicacion: "Sala de talleres", completada: false },
+          { hora: "20:00", titulo: "Fogón grupal", ubicacion: "Fogón central", completada: false }
+        ]
+      },
+      {
+        dia: 2,
+        fecha: "Sábado 17/01",
+        actividades: [
+          { hora: "08:30", titulo: "Desayuno grupal", ubicacion: "Comedor", completada: false },
+          { hora: "10:00", titulo: "Actividad deportiva", ubicacion: "Cancha de fútbol", completada: false },
+          { hora: "15:00", titulo: "Taller bíblico", ubicacion: "Capilla", completada: false },
+          { hora: "18:00", titulo: "Preparación cena", ubicacion: "Cocina grupal", completada: false }
+        ]
+      },
+      {
+        dia: 3,
+        fecha: "Domingo 18/01",
+        actividades: [
+          { hora: "09:00", titulo: "Devocional grupal", ubicacion: "Lago", completada: false },
+          { hora: "11:00", titulo: "Actividad recreativa", ubicacion: "Zona de juegos", completada: false },
+          { hora: "16:00", titulo: "Preparación show grupal", ubicacion: "Auditorio", completada: false }
+        ]
+      },
+      {
+        dia: 4,
+        fecha: "Lunes 19/01",
+        actividades: [
+          { hora: "08:00", titulo: "Despedida grupal", ubicacion: "Comedor", completada: false },
+          { hora: "10:00", titulo: "Limpieza de espacios", ubicacion: "Habitaciones", completada: false },
+          { hora: "12:00", titulo: "Evaluación y cierre", ubicacion: "Sala de talleres", completada: false }
+        ]
+      }
+    ];
+
+    const agregarTarea = async () => {
+      if (!nuevaTarea.trim()) return;
+
+      const nuevaTareaObj = {
+        tarea: nuevaTarea.trim(),
+        fecha: new Date(),
+        completada: false,
+        asignadaPor: esLider ? lider?.nombre : 'Administración',
+        asignadaA: esLider ? 'Todos' : null
+      };
+
+      try {
+        const grupoRef = doc(db, 'grupos_pequenos', grupo.id);
+        const nuevasTareas = [...tareas, nuevaTareaObj];
+
+        await updateDoc(grupoRef, {
+          tareas: nuevasTareas
+        });
+
+        setTareas(nuevasTareas);
+        setNuevaTarea('');
+
+        setNotification({
+          type: 'success',
+          message: '✓ Nueva tarea agregada'
+        });
+      } catch (error) {
+        console.error('Error agregando tarea:', error);
+        setNotification({
+          type: 'error',
+          message: '✗ Error al agregar tarea'
+        });
+      }
+    };
+
+    const toggleTarea = async (index) => {
+      if (!esLider) return;
+
+      const nuevasTareas = [...tareas];
+      nuevasTareas[index].completada = !nuevasTareas[index].completada;
+      nuevasTareas[index].fechaCompletada = nuevasTareas[index].completada ? new Date() : null;
+
+      try {
+        const grupoRef = doc(db, 'grupos_pequenos', grupo.id);
+        await updateDoc(grupoRef, {
+          tareas: nuevasTareas
+        });
+
+        setTareas(nuevasTareas);
+
+        setNotification({
+          type: 'success',
+          message: `✓ Tarea ${nuevasTareas[index].completada ? 'completada' : 'pendiente'}`
+        });
+      } catch (error) {
+        console.error('Error actualizando tarea:', error);
+      }
+    };
+
+    const tareasFiltradas = tareas.filter(t => {
+      if (filtroTareas === 'completadas') return t.completada;
+      if (filtroTareas === 'pendientes') return !t.completada;
+      return true;
+    });
+
+    return (
+      <div className="space-y-6 pb-24 max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-3xl border-2 border-blue-200">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div
+                className="w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black text-2xl"
+                style={{ backgroundColor: grupo.color || '#3B82F6' }}
+              >
+                {grupo.nombre.charAt(0)}
+              </div>
+              <div>
+                <h1 className="text-3xl font-black text-slate-900">{grupo.nombre}</h1>
+                <div className="flex items-center gap-3 mt-2">
+                  <span className="text-sm font-bold text-slate-600">
+                    Código: <code className="bg-white px-2 py-1 rounded">{grupo.codigo_acceso}</code>
+                  </span>
+                  {esLider && (
+                    <span className="text-sm font-bold bg-green-100 text-green-800 px-3 py-1 rounded-full">
+                      👑 Vista de Líder
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => crearGrupoWhatsApp(grupo)}
+                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg"
+              >
+                <Phone className="w-5 h-5" />
+                Crear WhatsApp
+              </button>
+              <button
+                onClick={onBack}
+                className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold flex items-center gap-2"
+              >
+                <ChevronLeft className="w-5 h-5" />
+                Volver
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Información del líder */}
+        {lider && (
+          <div className="bg-white rounded-2xl p-5 border-2 border-slate-200">
+            <h3 className="text-lg font-black text-slate-900 mb-3">👑 Líder del Grupo</h3>
+            <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-2xl">
+                {lider.nombre.charAt(0)}
+              </div>
+              <div className="flex-1">
+                <p className="font-black text-slate-900 text-lg">{lider.nombre}</p>
+                <div className="flex items-center gap-4 mt-2">
+                  {lider.telefono && (
+                    <a
+                      href={`tel:${lider.telefono}`}
+                      className="text-sm text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1"
+                    >
+                      <Phone className="w-4 h-4" />
+                      {lider.telefono}
+                    </a>
+                  )}
+                  <button
+                    onClick={() => onSelectAcampante(lider)}
+                    className="text-sm text-slate-600 hover:text-slate-900 font-bold"
+                  >
+                    Ver perfil →
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Estadísticas */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-2xl p-4 border-2 border-slate-200">
+            <p className="text-sm text-slate-600 font-medium">Total Miembros</p>
+            <p className="text-2xl font-black text-slate-900">{miembrosConInfo.length}</p>
+          </div>
+          <div className="bg-white rounded-2xl p-4 border-2 border-slate-200">
+            <p className="text-sm text-slate-600 font-medium">Presentes</p>
+            <p className="text-2xl font-black text-emerald-600">
+              {miembrosConInfo.filter(m => m.presente).length}
+            </p>
+          </div>
+          <div className="bg-white rounded-2xl p-4 border-2 border-slate-200">
+            <p className="text-sm text-slate-600 font-medium">Tareas</p>
+            <p className="text-2xl font-black text-blue-600">
+              {tareas.filter(t => t.completada).length}/{tareas.length}
+            </p>
+          </div>
+          <div className="bg-white rounded-2xl p-4 border-2 border-slate-200">
+            <p className="text-sm text-slate-600 font-medium">Activas</p>
+            <p className="text-2xl font-black text-green-600">
+              {grupo.activo ? 'Sí' : 'No'}
+            </p>
+          </div>
+        </div>
+
+        {/* Miembros del grupo */}
+        <div className="bg-white rounded-2xl p-6 border-2 border-slate-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-black text-slate-900">👥 Miembros del Grupo</h3>
+            <span className="text-sm text-slate-600 font-bold">
+              {miembrosConInfo.length} participantes
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {miembrosConInfo.map((miembro, idx) => (
+              <div
+                key={miembro.dni}
+                onClick={() => onSelectAcampante(miembro)}
+                className="flex items-center justify-between p-4 rounded-xl border-2 border-slate-200 hover:border-emerald-500 cursor-pointer hover:bg-slate-50 transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-slate-100 to-slate-200 rounded-xl flex items-center justify-center">
+                    <User className="w-6 h-6 text-slate-600" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900">{miembro.nombre}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-slate-500">DNI: {miembro.dni}</span>
+                      {miembro.presente && (
+                        <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded">
+                          ✓ Presente
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {miembro.telefono && (
+                  <a
+                    href={`tel:${miembro.telefono}`}
+                    className="text-blue-600 hover:text-blue-800 p-2"
+                  >
+                    <Phone className="w-4 h-4" />
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Gestión de Tareas (solo para líder) */}
+        {esLider && (
+          <div className="bg-white rounded-2xl p-6 border-2 border-emerald-200">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-black text-slate-900">📋 Gestión de Tareas</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setFiltroTareas('todas')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-bold ${filtroTareas === 'todas' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+                >
+                  Todas
+                </button>
+                <button
+                  onClick={() => setFiltroTareas('pendientes')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-bold ${filtroTareas === 'pendientes' ? 'bg-orange-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+                >
+                  Pendientes
+                </button>
+                <button
+                  onClick={() => setFiltroTareas('completadas')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-bold ${filtroTareas === 'completadas' ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+                >
+                  Completadas
+                </button>
+              </div>
+            </div>
+
+            {/* Agregar nueva tarea */}
+            <div className="flex gap-2 mb-6">
+              <input
+                type="text"
+                value={nuevaTarea}
+                onChange={(e) => setNuevaTarea(e.target.value)}
+                placeholder="Escribe una nueva tarea para el grupo..."
+                className="flex-1 px-4 py-3 border-2 border-slate-300 rounded-xl focus:border-emerald-500"
+                onKeyPress={(e) => e.key === 'Enter' && agregarTarea()}
+              />
+              <button
+                onClick={agregarTarea}
+                className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold"
+              >
+                Agregar
+              </button>
+            </div>
+
+            {/* Lista de tareas */}
+            <div className="space-y-3">
+              {tareasFiltradas.length > 0 ? (
+                tareasFiltradas.map((tarea, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex items-center justify-between p-4 rounded-xl border-2 ${tarea.completada ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => toggleTarea(idx)}
+                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${tarea.completada ? 'bg-green-500 border-green-500 text-white' : 'border-orange-400'}`}
+                      >
+                        {tarea.completada && <CheckCircle className="w-4 h-4" />}
+                      </button>
+                      <div>
+                        <p className={`font-bold ${tarea.completada ? 'text-green-900 line-through' : 'text-orange-900'}`}>
+                          {tarea.tarea}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {tarea.fecha?.toDate ? new Date(tarea.fecha.toDate()).toLocaleDateString() : 'Sin fecha'}
+                          {tarea.asignadaPor && ` • Asignada por: ${tarea.asignadaPor}`}
+                        </p>
+                      </div>
+                    </div>
+                    {tarea.completada && tarea.fechaCompletada && (
+                      <span className="text-xs text-green-700 font-bold">
+                        ✓ {tarea.fechaCompletada.toDate ? new Date(tarea.fechaCompletada.toDate()).toLocaleDateString() : 'Hoy'}
+                      </span>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-slate-500 font-semibold">No hay tareas asignadas</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Cronograma de 4 días */}
+        <div className="bg-white rounded-2xl p-6 border-2 border-slate-200">
+          <h3 className="text-lg font-black text-slate-900 mb-6">📅 Cronograma de 4 Días</h3>
+
+          <div className="space-y-6">
+            {actividadesPorDia.map((dia, idx) => (
+              <div key={idx} className="border-2 border-slate-200 rounded-2xl overflow-hidden">
+                <div className="bg-gradient-to-r from-slate-50 to-slate-100 p-4 border-b-2 border-slate-200">
+                  <h4 className="font-black text-slate-900">Día {dia.dia}: {dia.fecha}</h4>
+                </div>
+
+                <div className="divide-y divide-slate-200">
+                  {dia.actividades.map((actividad, aIdx) => (
+                    <div
+                      key={aIdx}
+                      className="flex items-center gap-4 p-4 hover:bg-slate-50"
+                    >
+                      <div className="flex-shrink-0 w-16 text-center">
+                        <span className="font-black text-slate-900 text-lg">{actividad.hora}</span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-bold text-slate-900">{actividad.titulo}</p>
+                        <p className="text-sm text-slate-600 flex items-center gap-1">
+                          <Building2 className="w-4 h-4" />
+                          {actividad.ubicacion}
+                        </p>
+                      </div>
+                      <div className="flex-shrink-0">
+                        {actividad.completada ? (
+                          <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-bold">
+                            ✓ Completada
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-bold">
+                            Pendiente
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Filtrar grupos por búsqueda
+  const gruposFiltrados = grupos.filter(grupo => {
+    if (!searchTerm) return true;
+
+    const term = searchTerm.toLowerCase();
+    return (
+      grupo.nombre.toLowerCase().includes(term) ||
+      grupo.codigo_acceso.toLowerCase().includes(term) ||
+      (grupo.lider_nombre && grupo.lider_nombre.toLowerCase().includes(term)) ||
+      grupo.id.toLowerCase().includes(term)
+    );
+  });
 
   if (loading) {
     return (
@@ -1290,8 +1815,21 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
     );
   }
 
-  if (mostrandoVistaLider) {
+  if (viewMode === 'lider' || viewMode === 'lider-detalle') {
     return <VistaLider />;
+  }
+
+  if (selectedGroup) {
+    return (
+      <DetalleGrupo
+        grupo={selectedGroup}
+        acampantes={acampantes}
+        onBack={() => setSelectedGroup(null)}
+        esLider={false}
+        onSelectAcampante={onSelectAcampante}
+        setNotification={setNotification}
+      />
+    );
   }
 
   return (
@@ -1302,13 +1840,20 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
           <div>
             <h1 className="text-4xl font-black text-slate-900">Grupos Pequeños</h1>
             <p className="text-slate-600 font-semibold mt-2">
-              {grupos.length} grupos • Organización de líderes y miembros
+              {grupos.length} grupos • {acampantes.filter(a => a.grupo).length} asignados por campo
             </p>
           </div>
           <div className="flex gap-3">
             <button
-              onClick={() => setMostrandoVistaLider(true)}
+              onClick={sincronizarMiembros}
               className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
+            >
+              <RefreshCw className="w-5 h-5" />
+              Sincronizar Miembros
+            </button>
+            <button
+              onClick={() => setViewMode('lider')}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center gap-2"
             >
               <UserCheck className="w-5 h-5" />
               Acceso Líder
@@ -1324,14 +1869,28 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
         </div>
       </div>
 
+      {/* Buscador */}
+      <div className="bg-white p-4 rounded-2xl border-2 border-slate-200 shadow-lg">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Buscar grupos por nombre, código, líder..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 font-semibold"
+          />
+        </div>
+      </div>
+
       {/* Estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl p-4 border-2 border-slate-200">
           <p className="text-sm text-slate-600 font-medium">Total Grupos</p>
           <p className="text-2xl font-black text-slate-900">{grupos.length}</p>
         </div>
-        <div className="bg-white rounded-2xl p-4 border-2 border-slate-200">
-          <p className="text-sm text-slate-600 font-medium">Total Miembros</p>
+        <div className="bg-white rounded-2xl p-4 border-2 border-emerald-200">
+          <p className="text-sm text-slate-600 font-medium">Miembros Totales</p>
           <p className="text-2xl font-black text-emerald-600">
             {grupos.reduce((acc, g) => acc + (g.miembros?.length || 0), 0)}
           </p>
@@ -1342,79 +1901,154 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
             {grupos.filter(g => g.lider_id).length}
           </p>
         </div>
+        <div className="bg-white rounded-2xl p-4 border-2 border-orange-200">
+          <p className="text-sm text-slate-600 font-medium">Con Tareas</p>
+          <p className="text-2xl font-black text-orange-600">
+            {grupos.filter(g => g.tareas?.length > 0).length}
+          </p>
+        </div>
       </div>
 
       {/* Lista de Grupos */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {grupos.map((grupo, index) => {
+        {gruposFiltrados.map((grupo, index) => {
           const lider = acampantes.find(a => a.dni === grupo.lider_id);
-          const miembrosConInfo = grupo.miembros
-            ?.map(dni => acampantes.find(a => a.dni === dni))
-            .filter(Boolean) || [];
+          const miembrosConInfo = (grupo.miembros || [])
+            .map(dni => acampantes.find(a => a.dni === dni))
+            .filter(Boolean);
+
+          const tareasCompletadas = (grupo.tareas || []).filter(t => t.completada).length;
+          const totalTareas = (grupo.tareas || []).length;
+          const progresoTareas = totalTareas > 0 ? Math.round((tareasCompletadas / totalTareas) * 100) : 0;
 
           return (
             <div
               key={grupo.id}
-              className="bg-white rounded-2xl p-6 border-2 border-slate-200 hover:border-emerald-500 transition-all shadow-sm hover:shadow-lg"
+              className="bg-white rounded-2xl p-6 border-2 border-slate-200 hover:border-emerald-500 transition-all shadow-sm hover:shadow-lg cursor-pointer"
+              onClick={() => setSelectedGroup(grupo)}
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-black text-slate-900">{grupo.nombre}</h3>
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded">
-                  {miembrosConInfo.length} miembros
-                </span>
+              {/* Header del grupo */}
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-xl"
+                    style={{ backgroundColor: grupo.color || '#3B82F6' }}
+                  >
+                    {grupo.nombre.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900">{grupo.nombre}</h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <code className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                        {grupo.codigo_acceso}
+                      </code>
+                      {grupo.activo && (
+                        <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">
+                          Activo
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    crearGrupoWhatsApp(grupo);
+                  }}
+                  className="text-green-600 hover:text-green-800"
+                  title="Crear grupo WhatsApp"
+                >
+                  <Phone className="w-5 h-5" />
+                </button>
               </div>
 
+              {/* Información del líder */}
               {lider && (
                 <div className="flex items-center gap-2 mb-3">
                   <UserCheck className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm text-slate-600 font-medium">
+                  <span className="text-sm text-slate-600 truncate">
                     Líder: {lider.nombre}
                   </span>
                 </div>
               )}
 
-              <div className="space-y-2 mb-4">
-                <p className="text-xs text-slate-400 font-bold">Código de acceso:</p>
-                <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
-                  <code className="text-sm font-black text-slate-900">{grupo.codigo_acceso}</code>
+              {/* Estadísticas */}
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="text-center">
+                  <p className="text-xl font-black text-slate-900">{miembrosConInfo.length}</p>
+                  <p className="text-xs text-slate-500">Miembros</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl font-black text-emerald-600">
+                    {miembrosConInfo.filter(m => m.presente).length}
+                  </p>
+                  <p className="text-xs text-slate-500">Presentes</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl font-black text-blue-600">
+                    {tareasCompletadas}/{totalTareas}
+                  </p>
+                  <p className="text-xs text-slate-500">Tareas</p>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <p className="text-xs text-slate-400 font-bold">Miembros:</p>
-                <div className="space-y-1">
-                  {miembrosConInfo.slice(0, 3).map((miembro, idx) => (
+              {/* Barra de progreso de tareas */}
+              {totalTareas > 0 && (
+                <div className="mb-4">
+                  <div className="flex justify-between text-xs text-slate-600 mb-1">
+                    <span>Progreso de tareas</span>
+                    <span>{progresoTareas}%</span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-2">
+                    <div
+                      className="bg-emerald-500 h-2 rounded-full transition-all"
+                      style={{ width: `${progresoTareas}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Miembros destacados */}
+              <div className="pt-4 border-t border-slate-200">
+                <p className="text-xs text-slate-400 font-bold mb-2">Miembros destacados:</p>
+                <div className="flex -space-x-2">
+                  {miembrosConInfo.slice(0, 5).map((miembro, idx) => (
                     <div
                       key={idx}
-                      onClick={() => onSelectAcampante(miembro)}
-                      className="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 cursor-pointer"
+                      className="w-8 h-8 bg-gradient-to-br from-slate-300 to-slate-400 rounded-full flex items-center justify-center text-white text-xs font-black border-2 border-white"
+                      title={miembro.nombre}
                     >
-                      <div className="w-6 h-6 bg-gradient-to-br from-slate-100 to-slate-200 rounded-md flex items-center justify-center">
-                        <span className="text-xs font-bold text-slate-900">
-                          {miembro.nombre.charAt(0)}
-                        </span>
-                      </div>
-                      <span className="text-sm text-slate-700 truncate">
-                        {miembro.nombre.split(' ')[0]}
-                      </span>
+                      {miembro.nombre.charAt(0)}
                     </div>
                   ))}
-                  {miembrosConInfo.length > 3 && (
-                    <p className="text-xs text-slate-500 text-center pt-2">
-                      +{miembrosConInfo.length - 3} más...
-                    </p>
+                  {miembrosConInfo.length > 5 && (
+                    <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-slate-700 text-xs font-bold border-2 border-white">
+                      +{miembrosConInfo.length - 5}
+                    </div>
                   )}
                 </div>
               </div>
 
+              {/* Footer */}
               <div className="mt-4 pt-4 border-t border-slate-200">
-                <button
-                  onClick={() => crearGrupoWhatsApp(grupo)}
-                  className="w-full py-2 bg-green-50 text-green-700 rounded-lg font-bold border-2 border-green-200 hover:border-green-500 transition-all flex items-center justify-center gap-2"
-                >
-                  <Phone className="w-4 h-4" />
-                  Crear WhatsApp
-                </button>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-500">
+                    {grupo.miembrosAutomaticos?.length > 0 && (
+                      <span className="text-emerald-600 font-bold">
+                        +{grupo.miembrosAutomaticos.length} auto
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedGroup(grupo);
+                    }}
+                    className="text-sm font-bold text-emerald-600 hover:text-emerald-800"
+                  >
+                    Ver detalles →
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -1426,11 +2060,12 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
         <div className="flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-blue-600" />
           <div>
-            <p className="font-bold text-slate-900">Instrucciones:</p>
+            <p className="font-bold text-slate-900">Funcionalidades:</p>
             <p className="text-sm text-slate-600">
-              1. Cada líder recibe un código de acceso único para ver los detalles de su grupo.
-              2. Los códigos deben ser compartidos solo con los líderes de grupo.
-              3. Usa "Crear WhatsApp" para generar un grupo de WhatsApp con todos los miembros.
+              1. <strong>Sincronizar Miembros</strong>: Actualiza automáticamente los grupos con acampantes del campo "grupo".<br />
+              2. <strong>Acceso Líder</strong>: Los líderes pueden ver su grupo, gestionar tareas y marcar actividades.<br />
+              3. <strong>Crear WhatsApp</strong>: Genera un grupo de WhatsApp con todos los miembros del grupo.<br />
+              4. <strong>Ver Detalles</strong>: Haz clic en cualquier grupo para ver cronograma, tareas y miembros.
             </p>
           </div>
         </div>
