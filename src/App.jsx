@@ -1127,6 +1127,7 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
   const [showCrearGrupo, setShowCrearGrupo] = useState(false);
   const [acampanteSeleccionado, setAcampanteSeleccionado] = useState(null);
   const [codigoAcceso, setCodigoAcceso] = useState('');
+  const [mostrandoVistaLider, setMostrandoVistaLider] = useState(false);
 
   // Cargar grupos
   useEffect(() => {
@@ -1143,6 +1144,10 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
       setGrupos(gruposData);
     } catch (error) {
       console.error('Error cargando grupos:', error);
+      setNotification({
+        type: 'error',
+        message: 'Error al cargar grupos pequeños'
+      });
     } finally {
       setLoading(false);
     }
@@ -1159,15 +1164,10 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
       .filter(tel => tel)
       .map(tel => tel.replace(/\D/g, '')); // Quitar caracteres no numéricos
 
-    // Generar link de WhatsApp (método simple)
+    // Crear link para mensaje individual con todos los números
     const numerosTexto = miembrosNumeros.join(',');
     const mensaje = `*${grupo.nombre} - AVIVA CAMP 2026*%0A%0AHola equipo! Este es nuestro grupo de WhatsApp para coordinar nuestras actividades.`;
 
-    // Dos opciones:
-    // 1. Crear link para chat grupal (requiere que el líder cree el grupo primero)
-    // 2. Crear link para mensaje individual con todos los números
-
-    // Opción 2 (más simple):
     const whatsappLink = `https://wa.me/?text=${mensaje}`;
 
     // Abrir en nueva pestaña
@@ -1175,7 +1175,7 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
 
     setNotification({
       type: 'info',
-      message: 'Abre WhatsApp y agrega manualmente los números del grupo'
+      message: 'Preparando grupo de WhatsApp...'
     });
   };
 
@@ -1200,7 +1200,7 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
 
     if (!accesoConcedido) {
       return (
-        <div className="max-w-md mx-auto mt-10">
+        <div className="max-w-md mx-auto">
           <div className="bg-white p-8 rounded-2xl border-2 border-slate-200">
             <h3 className="text-xl font-black text-slate-900 mb-4">Acceso Líder</h3>
             <p className="text-slate-600 mb-6">Ingresa el código de acceso de tu grupo</p>
@@ -1230,6 +1230,7 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
             <div>
               <h2 className="text-2xl font-black text-slate-900">{grupoLider.nombre}</h2>
               <p className="text-blue-600 font-semibold">Vista de Líder</p>
+              <p className="text-sm text-slate-600 mt-2">Código: {grupoLider.codigo_acceso}</p>
             </div>
             <button
               onClick={() => crearGrupoWhatsApp(grupoLider)}
@@ -1241,22 +1242,201 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
           </div>
         </div>
 
-        {/* Tareas del grupo */}
-        <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 mb-6">
-          <h3 className="text-lg font-black text-slate-900 mb-4">Tareas asignadas</h3>
-          {/* Lista de tareas */}
-        </div>
-
         {/* Miembros del grupo */}
         <div className="bg-white rounded-2xl p-6 border-2 border-slate-200">
           <h3 className="text-lg font-black text-slate-900 mb-4">Miembros del grupo</h3>
-          {/* Lista de miembros */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {grupoLider.miembros?.map(dni => {
+              const acampante = acampantes.find(a => a.dni === dni);
+              if (!acampante) return null;
+
+              return (
+                <div
+                  key={dni}
+                  onClick={() => onSelectAcampante(acampante)}
+                  className="flex items-center justify-between p-4 rounded-xl border-2 border-slate-200 hover:border-emerald-500 cursor-pointer hover:bg-slate-50 transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-slate-100 to-slate-200 rounded-xl flex items-center justify-center">
+                      <User className="w-5 h-5 text-slate-600" strokeWidth={2} />
+                    </div>
+                    <span className="text-sm font-bold text-slate-900">{acampante.nombre}</span>
+                  </div>
+                  {acampante.telefono && (
+                    <a
+                      href={`tel:${acampante.telefono}`}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      <Phone className="w-4 h-4" />
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
   };
 
-  // Resto del componente...
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-700 font-bold">Cargando grupos...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (mostrandoVistaLider) {
+    return <VistaLider />;
+  }
+
+  return (
+    <div className="space-y-6 pb-24 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-emerald-50 to-white p-6 rounded-3xl border-2 border-slate-200">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-black text-slate-900">Grupos Pequeños</h1>
+            <p className="text-slate-600 font-semibold mt-2">
+              {grupos.length} grupos • Organización de líderes y miembros
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setMostrandoVistaLider(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
+            >
+              <UserCheck className="w-5 h-5" />
+              Acceso Líder
+            </button>
+            <button
+              onClick={loadGrupos}
+              className="px-4 py-2 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition-all flex items-center gap-2"
+            >
+              <RefreshCw className="w-5 h-5" />
+              Recargar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Estadísticas */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl p-4 border-2 border-slate-200">
+          <p className="text-sm text-slate-600 font-medium">Total Grupos</p>
+          <p className="text-2xl font-black text-slate-900">{grupos.length}</p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border-2 border-slate-200">
+          <p className="text-sm text-slate-600 font-medium">Total Miembros</p>
+          <p className="text-2xl font-black text-emerald-600">
+            {grupos.reduce((acc, g) => acc + (g.miembros?.length || 0), 0)}
+          </p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border-2 border-blue-200">
+          <p className="text-sm text-slate-600 font-medium">Líderes Activos</p>
+          <p className="text-2xl font-black text-blue-600">
+            {grupos.filter(g => g.lider_id).length}
+          </p>
+        </div>
+      </div>
+
+      {/* Lista de Grupos */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {grupos.map((grupo, index) => {
+          const lider = acampantes.find(a => a.dni === grupo.lider_id);
+          const miembrosConInfo = grupo.miembros
+            ?.map(dni => acampantes.find(a => a.dni === dni))
+            .filter(Boolean) || [];
+
+          return (
+            <div
+              key={grupo.id}
+              className="bg-white rounded-2xl p-6 border-2 border-slate-200 hover:border-emerald-500 transition-all shadow-sm hover:shadow-lg"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-black text-slate-900">{grupo.nombre}</h3>
+                <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded">
+                  {miembrosConInfo.length} miembros
+                </span>
+              </div>
+
+              {lider && (
+                <div className="flex items-center gap-2 mb-3">
+                  <UserCheck className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm text-slate-600 font-medium">
+                    Líder: {lider.nombre}
+                  </span>
+                </div>
+              )}
+
+              <div className="space-y-2 mb-4">
+                <p className="text-xs text-slate-400 font-bold">Código de acceso:</p>
+                <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
+                  <code className="text-sm font-black text-slate-900">{grupo.codigo_acceso}</code>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs text-slate-400 font-bold">Miembros:</p>
+                <div className="space-y-1">
+                  {miembrosConInfo.slice(0, 3).map((miembro, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => onSelectAcampante(miembro)}
+                      className="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 cursor-pointer"
+                    >
+                      <div className="w-6 h-6 bg-gradient-to-br from-slate-100 to-slate-200 rounded-md flex items-center justify-center">
+                        <span className="text-xs font-bold text-slate-900">
+                          {miembro.nombre.charAt(0)}
+                        </span>
+                      </div>
+                      <span className="text-sm text-slate-700 truncate">
+                        {miembro.nombre.split(' ')[0]}
+                      </span>
+                    </div>
+                  ))}
+                  {miembrosConInfo.length > 3 && (
+                    <p className="text-xs text-slate-500 text-center pt-2">
+                      +{miembrosConInfo.length - 3} más...
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-slate-200">
+                <button
+                  onClick={() => crearGrupoWhatsApp(grupo)}
+                  className="w-full py-2 bg-green-50 text-green-700 rounded-lg font-bold border-2 border-green-200 hover:border-green-500 transition-all flex items-center justify-center gap-2"
+                >
+                  <Phone className="w-4 h-4" />
+                  Crear WhatsApp
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Instrucciones */}
+      <div className="bg-white rounded-2xl p-4 border-2 border-slate-200">
+        <div className="flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-blue-600" />
+          <div>
+            <p className="font-bold text-slate-900">Instrucciones:</p>
+            <p className="text-sm text-slate-600">
+              1. Cada líder recibe un código de acceso único para ver los detalles de su grupo.
+              2. Los códigos deben ser compartidos solo con los líderes de grupo.
+              3. Usa "Crear WhatsApp" para generar un grupo de WhatsApp con todos los miembros.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 
