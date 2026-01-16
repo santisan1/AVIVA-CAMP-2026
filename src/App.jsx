@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { initializeApp, db } from 'firebase/app';
+import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import {
   Home, QrCode, Building2, Search, Calendar, User, Phone, AlertCircle,
@@ -809,6 +809,12 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, setNotification 
 
   // Usar useMemo para cálculos costosos
   const { habitacionesFiltradas, acampantesFiltrados, stats } = useMemo(() => {
+    // Obtener todos los DNI asignados
+    const asignados = habitaciones.flatMap(h => h.ocupantes || []);
+
+    // Filtrar acampantes no asignados
+    const acampantesSinHabitacion = acampantes.filter(a => !asignados.includes(a.dni));
+
     const habitacionesFiltradas = habitaciones.filter(habitacion => {
       if (filtroGenero === 'todos') return true;
       if (filtroGenero === 'mixta') return habitacion.genero === 'mixta';
@@ -837,7 +843,7 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, setNotification 
     };
 
     return { habitacionesFiltradas, acampantesFiltrados, stats };
-  }, [habitaciones, acampantesSinHabitacion, filtroGenero, acampantes.length]);
+  }, [habitaciones, acampantes, filtroGenero]);
 
   if (loading) {
     return (
@@ -1254,72 +1260,7 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
 };
 
 
-const CrearGrupoModal = ({ acampantes, onClose, onCreate }) => {
-  const [nombreGrupo, setNombreGrupo] = useState('');
-  const [liderId, setLiderId] = useState('');
-  const [miembrosSeleccionados, setMiembrosSeleccionados] = useState([]);
-  const [colorGrupo, setColorGrupo] = useState('#3B82F6');
 
-  const handleCrear = async () => {
-    if (!nombreGrupo || !liderId) {
-      alert('Completa los campos requeridos');
-      return;
-    }
-
-    const grupo = {
-      nombre: nombreGrupo,
-      lider_id: liderId,
-      lider_nombre: acampantes.find(a => a.dni === liderId)?.nombre,
-      codigo_acceso: generarCodigoAcceso(),
-      color: colorGrupo,
-      miembros: [...miembrosSeleccionados, liderId], // Incluir líder
-      tareas: [],
-      activo: true,
-      fecha_creacion: new Date().toISOString()
-    };
-
-    await onCreate(grupo);
-    onClose();
-  };
-
-  const generarCodigoAcceso = () => {
-    const letras = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const numeros = '0123456789';
-    let codigo = '';
-
-    // 4 letras + 4 números
-    for (let i = 0; i < 4; i++) {
-      codigo += letras.charAt(Math.floor(Math.random() * letras.length));
-    }
-    for (let i = 0; i < 4; i++) {
-      codigo += numeros.charAt(Math.floor(Math.random() * numeros.length));
-    }
-
-    return codigo;
-  };
-
-};
-
-const generarLinkWhatsAppMejorado = (grupo, acampantes) => {
-  const lider = acampantes.find(a => a.dni === grupo.lider_id);
-  const miembros = grupo.miembros
-    .map(dni => acampantes.find(a => a.dni === dni))
-    .filter(a => a && a.telefono);
-
-  // Formatear números internacionalmente (Argentina: +54 9 XXX XXX XXXX)
-  const numerosFormateados = miembros.map(a => {
-    let telefono = a.telefono.replace(/\D/g, '');
-    if (telefono.startsWith('0')) telefono = telefono.substring(1);
-    if (!telefono.startsWith('54')) telefono = '54' + telefono;
-    return telefono;
-  });
-
-  // Crear mensaje con todos los números
-  const numerosTexto = numerosFormateados.join('%0A');
-  const mensaje = `*${grupo.nombre} - AVIVA CAMP 2026*%0A%0ALíder: ${lider?.nombre}%0A%0ANúmeros del equipo:%0A${numerosTexto}%0A%0A¡Coordinen sus actividades aquí!`;
-
-  return `https://wa.me/?text=${mensaje}`;
-};
 const SearchView = ({ acampantes, onSelectAcampante }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
