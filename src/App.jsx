@@ -718,7 +718,7 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, setNotification 
         if (generoHabitacion !== generoMapeado) {
           setNotification({
             type: 'error',
-            message: `${acampante.nombre} no puede ir en habitación de ${generoHabitacion === 'hombre' ? 'hombres' : 'mujeres'}`
+            message: `❌ ${acampante.nombre} no puede ir en habitación de ${habitacion.genero === 'hombre' ? 'hombres' : 'mujeres'}`
           });
           return;
         }
@@ -1115,9 +1115,211 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, setNotification 
   );
 };
 
+const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
+  const [grupos, setGrupos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCrearGrupo, setShowCrearGrupo] = useState(false);
+  const [acampanteSeleccionado, setAcampanteSeleccionado] = useState(null);
+  const [codigoAcceso, setCodigoAcceso] = useState('');
+
+  // Cargar grupos
+  useEffect(() => {
+    loadGrupos();
+  }, []);
+
+  const loadGrupos = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'grupos_pequenos'));
+      const gruposData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setGrupos(gruposData);
+    } catch (error) {
+      console.error('Error cargando grupos:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Función para crear grupo de WhatsApp
+  const crearGrupoWhatsApp = (grupo) => {
+    const lider = acampantes.find(a => a.dni === grupo.lider_id);
+    const miembrosNumeros = grupo.miembros
+      .map(dni => {
+        const acampante = acampantes.find(a => a.dni === dni);
+        return acampante?.telefono;
+      })
+      .filter(tel => tel)
+      .map(tel => tel.replace(/\D/g, '')); // Quitar caracteres no numéricos
+
+    // Generar link de WhatsApp (método simple)
+    const numerosTexto = miembrosNumeros.join(',');
+    const mensaje = `*${grupo.nombre} - AVIVA CAMP 2026*%0A%0AHola equipo! Este es nuestro grupo de WhatsApp para coordinar nuestras actividades.`;
+
+    // Dos opciones:
+    // 1. Crear link para chat grupal (requiere que el líder cree el grupo primero)
+    // 2. Crear link para mensaje individual con todos los números
+
+    // Opción 2 (más simple):
+    const whatsappLink = `https://wa.me/?text=${mensaje}`;
+
+    // Abrir en nueva pestaña
+    window.open(whatsappLink, '_blank');
+
+    setNotification({
+      type: 'info',
+      message: 'Abre WhatsApp y agrega manualmente los números del grupo'
+    });
+  };
+
+  // Vista de líder con código de acceso
+  const VistaLider = () => {
+    const [codigoIngresado, setCodigoIngresado] = useState('');
+    const [grupoLider, setGrupoLider] = useState(null);
+    const [accesoConcedido, setAccesoConcedido] = useState(false);
+
+    const verificarCodigo = () => {
+      const grupo = grupos.find(g => g.codigo_acceso === codigoIngresado);
+      if (grupo) {
+        setGrupoLider(grupo);
+        setAccesoConcedido(true);
+      } else {
+        setNotification({
+          type: 'error',
+          message: 'Código de acceso incorrecto'
+        });
+      }
+    };
+
+    if (!accesoConcedido) {
+      return (
+        <div className="max-w-md mx-auto mt-10">
+          <div className="bg-white p-8 rounded-2xl border-2 border-slate-200">
+            <h3 className="text-xl font-black text-slate-900 mb-4">Acceso Líder</h3>
+            <p className="text-slate-600 mb-6">Ingresa el código de acceso de tu grupo</p>
+            <input
+              type="text"
+              value={codigoIngresado}
+              onChange={(e) => setCodigoIngresado(e.target.value)}
+              placeholder="Ej: ALFA2024"
+              className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl mb-4"
+            />
+            <button
+              onClick={verificarCodigo}
+              className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold"
+            >
+              Acceder a mi grupo
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Vista del líder después de acceder
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border-2 border-blue-200 mb-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-black text-slate-900">{grupoLider.nombre}</h2>
+              <p className="text-blue-600 font-semibold">Vista de Líder</p>
+            </div>
+            <button
+              onClick={() => crearGrupoWhatsApp(grupoLider)}
+              className="px-6 py-3 bg-green-600 text-white rounded-xl font-bold flex items-center gap-2"
+            >
+              <Phone className="w-5 h-5" />
+              Crear grupo WhatsApp
+            </button>
+          </div>
+        </div>
+
+        {/* Tareas del grupo */}
+        <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 mb-6">
+          <h3 className="text-lg font-black text-slate-900 mb-4">Tareas asignadas</h3>
+          {/* Lista de tareas */}
+        </div>
+
+        {/* Miembros del grupo */}
+        <div className="bg-white rounded-2xl p-6 border-2 border-slate-200">
+          <h3 className="text-lg font-black text-slate-900 mb-4">Miembros del grupo</h3>
+          {/* Lista de miembros */}
+        </div>
+      </div>
+    );
+  };
+
+  // Resto del componente...
+};
 
 
+const CrearGrupoModal = ({ acampantes, onClose, onCreate }) => {
+  const [nombreGrupo, setNombreGrupo] = useState('');
+  const [liderId, setLiderId] = useState('');
+  const [miembrosSeleccionados, setMiembrosSeleccionados] = useState([]);
+  const [colorGrupo, setColorGrupo] = useState('#3B82F6');
 
+  const handleCrear = async () => {
+    if (!nombreGrupo || !liderId) {
+      alert('Completa los campos requeridos');
+      return;
+    }
+
+    const grupo = {
+      nombre: nombreGrupo,
+      lider_id: liderId,
+      lider_nombre: acampantes.find(a => a.dni === liderId)?.nombre,
+      codigo_acceso: generarCodigoAcceso(),
+      color: colorGrupo,
+      miembros: [...miembrosSeleccionados, liderId], // Incluir líder
+      tareas: [],
+      activo: true,
+      fecha_creacion: new Date().toISOString()
+    };
+
+    await onCreate(grupo);
+    onClose();
+  };
+
+  const generarCodigoAcceso = () => {
+    const letras = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const numeros = '0123456789';
+    let codigo = '';
+
+    // 4 letras + 4 números
+    for (let i = 0; i < 4; i++) {
+      codigo += letras.charAt(Math.floor(Math.random() * letras.length));
+    }
+    for (let i = 0; i < 4; i++) {
+      codigo += numeros.charAt(Math.floor(Math.random() * numeros.length));
+    }
+
+    return codigo;
+  };
+
+};
+
+const generarLinkWhatsAppMejorado = (grupo, acampantes) => {
+  const lider = acampantes.find(a => a.dni === grupo.lider_id);
+  const miembros = grupo.miembros
+    .map(dni => acampantes.find(a => a.dni === dni))
+    .filter(a => a && a.telefono);
+
+  // Formatear números internacionalmente (Argentina: +54 9 XXX XXX XXXX)
+  const numerosFormateados = miembros.map(a => {
+    let telefono = a.telefono.replace(/\D/g, '');
+    if (telefono.startsWith('0')) telefono = telefono.substring(1);
+    if (!telefono.startsWith('54')) telefono = '54' + telefono;
+    return telefono;
+  });
+
+  // Crear mensaje con todos los números
+  const numerosTexto = numerosFormateados.join('%0A');
+  const mensaje = `*${grupo.nombre} - AVIVA CAMP 2026*%0A%0ALíder: ${lider?.nombre}%0A%0ANúmeros del equipo:%0A${numerosTexto}%0A%0A¡Coordinen sus actividades aquí!`;
+
+  return `https://wa.me/?text=${mensaje}`;
+};
 const SearchView = ({ acampantes, onSelectAcampante }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -1534,6 +1736,7 @@ export default function AvivaApp() {
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'scanner', label: 'Escanear', icon: QrCode },
     { id: 'habitaciones', label: 'Habitaciones', icon: Building2 },
+    { id: 'grupos', label: 'Grupos', icon: Users }, // Nueva pestaña
     { id: 'busqueda', label: 'Búsqueda', icon: Search },
     { id: 'talleres', label: 'Talleres', icon: Award },
     { id: 'agenda', label: 'Agenda', icon: Calendar },
@@ -1604,6 +1807,13 @@ export default function AvivaApp() {
             onSelectAcampante={setSelectedAcampante}
             setNotification={setNotification}
 
+          />
+        )}
+        {activeTab === 'grupos' && (
+          <GruposView
+            acampantes={acampantes}
+            onSelectAcampante={setSelectedAcampante}
+            setNotification={setNotification}
           />
         )}
         {activeTab === 'busqueda' && (
