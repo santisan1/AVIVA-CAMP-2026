@@ -1557,7 +1557,7 @@ export default function AvivaApp() {
           <HabitacionesMejoradas
             acampantes={acampantes}
             onSelectAcampante={setSelectedAcampante}
-            onUpdateHabitacion={handleUpdateHabitacion}
+
           />
         )}
         {activeTab === 'busqueda' && (
