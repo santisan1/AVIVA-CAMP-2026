@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, db } from 'firebase/app';
 import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import {
   Home, QrCode, Building2, Search, Calendar, User, Phone, AlertCircle,
@@ -631,13 +631,12 @@ const KPICard = ({ icon: Icon, label, value, color }) => {
   );
 };
 
-const HabitacionesMejoradas = ({ acampantes, onSelectAcampante }) => {
+const HabitacionesMejoradas = ({ acampantes, onSelectAcampante, setNotification }) => {
   const [habitaciones, setHabitaciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [acampantesSinHabitacion, setAcampantesSinHabitacion] = useState([]);
   const [draggedAcampante, setDraggedAcampante] = useState(null);
   const [targetHabitacion, setTargetHabitacion] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [filtroGenero, setFiltroGenero] = useState('todos');
 
   // Cargar habitaciones
@@ -661,6 +660,10 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante }) => {
       setHabitaciones(habitacionesData);
     } catch (error) {
       console.error('Error cargando habitaciones:', error);
+      setNotification({
+        type: 'error',
+        message: 'Error al cargar habitaciones'
+      });
     } finally {
       setLoading(false);
     }
@@ -695,7 +698,10 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante }) => {
       // Verificar capacidad
       const ocupantesActuales = habitacion.ocupantes?.length || 0;
       if (ocupantesActuales >= habitacion.capacidad) {
-        alert(`❌ Habitación ${habitacion.numero} está llena (${habitacion.capacidad}/${habitacion.capacidad})`);
+        setNotification({
+          type: 'error',
+          message: `Habitación ${habitacion.numero} está llena (${habitacion.capacidad}/${habitacion.capacidad})`
+        });
         return;
       }
 
@@ -710,7 +716,10 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante }) => {
             generoAcampante;
 
         if (generoHabitacion !== generoMapeado) {
-          alert(`❌ ${acampante.nombre} no puede ir en habitación de ${generoHabitacion === 'hombre' ? 'hombres' : 'mujeres'}`);
+          setNotification({
+            type: 'error',
+            message: `${acampante.nombre} no puede ir en habitación de ${generoHabitacion === 'hombre' ? 'hombres' : 'mujeres'}`
+          });
           return;
         }
       }
@@ -736,13 +745,22 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante }) => {
         habitacion: habitacion.numero
       });
 
+      // Notificación de éxito
+      setNotification({
+        type: 'success',
+        message: `${acampante.nombre} asignado a habitación ${habitacion.numero}`
+      });
+
       // Limpiar selección
       setDraggedAcampante(null);
       setTargetHabitacion(null);
 
     } catch (error) {
       console.error('Error asignando acampante:', error);
-      alert('Error al asignar habitación');
+      setNotification({
+        type: 'error',
+        message: 'Error al asignar habitación'
+      });
     }
   };
 
@@ -773,41 +791,53 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante }) => {
           : h
       ));
 
+      // Notificación
+      const acampante = acampantes.find(a => a.dni === dni);
+      setNotification({
+        type: 'success',
+        message: `${acampante?.nombre || 'Acampante'} removido de habitación ${habitacion.numero}`
+      });
+
     } catch (error) {
       console.error('Error quitando acampante:', error);
+      setNotification({
+        type: 'error',
+        message: 'Error al remover acampante de la habitación'
+      });
     }
   };
 
-  // Filtrar habitaciones
-  const habitacionesFiltradas = habitaciones.filter(habitacion => {
-    if (filtroGenero === 'todos') return true;
-    if (filtroGenero === 'mixta') return habitacion.genero === 'mixta';
-    return habitacion.genero === filtroGenero;
-  });
+  // Usar useMemo para cálculos costosos
+  const { habitacionesFiltradas, acampantesFiltrados, stats } = useMemo(() => {
+    const habitacionesFiltradas = habitaciones.filter(habitacion => {
+      if (filtroGenero === 'todos') return true;
+      if (filtroGenero === 'mixta') return habitacion.genero === 'mixta';
+      return habitacion.genero === filtroGenero;
+    });
 
-  // Filtrar acampantes sin habitación
-  const acampantesFiltrados = acampantesSinHabitacion.filter(acampante => {
-    if (filtroGenero === 'todos') return true;
-    if (filtroGenero === 'mixta') return true; // Para mixta, mostrar todos
+    const acampantesFiltrados = acampantesSinHabitacion.filter(acampante => {
+      if (filtroGenero === 'todos') return true;
+      if (filtroGenero === 'mixta') return true;
 
-    const generoAcampante = acampante.sexo.toLowerCase();
-    const generoFiltro = filtroGenero;
+      const generoAcampante = acampante.sexo.toLowerCase();
+      const generoFiltro = filtroGenero;
 
-    // Mapear género
-    if (generoAcampante.includes('masculino') && generoFiltro === 'hombre') return true;
-    if (generoAcampante.includes('femenino') && generoFiltro === 'mujer') return true;
-    return false;
-  });
+      if (generoAcampante.includes('masculino') && generoFiltro === 'hombre') return true;
+      if (generoAcampante.includes('femenino') && generoFiltro === 'mujer') return true;
+      return false;
+    });
 
-  // Estadísticas
-  const stats = {
-    totalAcampantes: acampantes.length,
-    totalHabitaciones: habitaciones.length,
-    habitacionesOcupadas: habitaciones.filter(h => (h.ocupantes?.length || 0) > 0).length,
-    habitacionesDisponibles: habitaciones.filter(h => (h.ocupantes?.length || 0) < h.capacidad).length,
-    acampantesAsignados: habitaciones.reduce((acc, h) => acc + (h.ocupantes?.length || 0), 0),
-    acampantesSinAsignar: acampantesSinHabitacion.length
-  };
+    const stats = {
+      totalAcampantes: acampantes.length,
+      totalHabitaciones: habitaciones.length,
+      habitacionesOcupadas: habitaciones.filter(h => (h.ocupantes?.length || 0) > 0).length,
+      habitacionesDisponibles: habitaciones.filter(h => (h.ocupantes?.length || 0) < h.capacidad).length,
+      acampantesAsignados: habitaciones.reduce((acc, h) => acc + (h.ocupantes?.length || 0), 0),
+      acampantesSinAsignar: acampantesSinHabitacion.length
+    };
+
+    return { habitacionesFiltradas, acampantesFiltrados, stats };
+  }, [habitaciones, acampantesSinHabitacion, filtroGenero, acampantes.length]);
 
   if (loading) {
     return (
@@ -824,10 +854,23 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante }) => {
     <div className="space-y-6 pb-24 max-w-7xl mx-auto">
       {/* Header */}
       <div className="bg-gradient-to-br from-emerald-50 to-white p-6 rounded-3xl border-2 border-slate-200">
-        <h1 className="text-4xl font-black text-slate-900">Asignación de Habitaciones</h1>
-        <p className="text-slate-600 font-semibold mt-2">
-          Arrastra acampantes a las habitaciones • {acampantes.length} participantes
-        </p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-black text-slate-900">Asignación de Habitaciones</h1>
+            <p className="text-slate-600 font-semibold mt-2">
+              Arrastra acampantes a las habitaciones • {acampantes.length} participantes
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={loadHabitaciones}
+              className="px-4 py-2 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition-all flex items-center gap-2"
+            >
+              <RefreshCw className="w-5 h-5" />
+              Recargar
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Estadísticas */}
@@ -1071,6 +1114,8 @@ const HabitacionesMejoradas = ({ acampantes, onSelectAcampante }) => {
     </div>
   );
 };
+
+
 
 
 const SearchView = ({ acampantes, onSelectAcampante }) => {
@@ -1557,6 +1602,7 @@ export default function AvivaApp() {
           <HabitacionesMejoradas
             acampantes={acampantes}
             onSelectAcampante={setSelectedAcampante}
+            setNotification={setNotification}
 
           />
         )}
