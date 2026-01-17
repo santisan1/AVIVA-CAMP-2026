@@ -187,6 +187,38 @@ const LoginScreen = ({ onLogin }) => {
         </div>
     );
 };
+const interpretarActividad = (actividad, acampante, grupo) => {
+    switch (actividad.tipo) {
+
+        case 'fijo':
+            return {
+                ...actividad,
+                titulo: actividad.titulo
+            };
+
+        case 'taller_personalizado':
+            return {
+                ...actividad,
+                titulo: acampante?.taller
+                    ? `${actividad.titulo_base}: ${acampante.taller}`
+                    : actividad.titulo_base
+            };
+
+        case 'tarea_equipo':
+            const tarea = grupo?.tareas?.find(t => !t.completada);
+
+            return {
+                ...actividad,
+                titulo: tarea
+                    ? `Tarea: ${tarea.tarea}`
+                    : actividad.titulo_base,
+                ubicacion: tarea?.ubicacion || actividad.ubicacion
+            };
+
+        default:
+            return actividad;
+    }
+};
 
 // Componente Principal de Vista del Acampante
 const AcampanteView = ({ dni, onLogout }) => {
@@ -248,7 +280,17 @@ const AcampanteView = ({ dni, onLogout }) => {
                 { hora: '20:00', titulo: 'Reunión General', ubicacion: 'Auditorio', icon: '🎤', duracion: 120 }
             ];
 
-            setAgendaHoy(agendaSimulada);
+            //setAgendaHoy(agendaSimulada);
+            const cargarAgenda = async (acampanteData, grupoData) => {
+                const snap = await getDocs(collection(db, 'agenda'));
+
+                const agenda = snap.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() }))
+                    .sort((a, b) => a.orden - b.orden)
+                    .map(act => interpretarActividad(act, acampanteData, grupoData));
+
+                setAgendaHoy(agenda);
+            };
 
             // Determinar actividad actual
             const ahora = new Date();
@@ -301,6 +343,7 @@ const AcampanteView = ({ dni, onLogout }) => {
             </div>
         );
     }
+    cargarAgenda(acampanteData, grupo);
 
     return (
         <div className="min-h-screen bg-white pb-32 relative overflow-x-hidden">
