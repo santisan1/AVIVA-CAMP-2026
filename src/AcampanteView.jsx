@@ -17,13 +17,14 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // Componente de Login
+// Componente de Login
 const LoginScreen = ({ onLogin }) => {
     const [dni, setDni] = useState('');
     const [llave, setLlave] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // Extraer DNI de la URL si existe
+    // Extraer DNI de la URL y autocompletar
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const dniParam = params.get('dni');
@@ -84,33 +85,33 @@ const LoginScreen = ({ onLogin }) => {
     };
 
     return (
-        <div className="min-h-screen bg-whiteflex items-center justify-center p-6">
+        <div className="min-h-screen bg-gradient-to-br from-teal-50 via-emerald-50 to-white flex items-center justify-center p-6">
             <div className="w-full max-w-md">
                 {/* Logo y Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-teal-500 to-emerald-600 rounded-3xl mb-4 shadow-2xl shadow-orange-500/20">
+                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-[#008080] to-[#00A86B] rounded-3xl mb-4 shadow-2xl shadow-teal-500/30">
                         <span className="text-4xl">⛰️</span>
                     </div>
                     <h1 className="text-4xl font-black text-slate-900 mb-2">AVIVA CAMP 2026</h1>
-                    <p className="text-slate-600 font-semibold">Acceso Seguro de Acampante</p>
+                    <p className="text-slate-600 font-semibold">Bienvenido, Acampante</p>
                 </div>
 
                 {/* Card de Login */}
-                <div className="bg-teal-50 rounded-3xl p-8 border border-slate-200 shadow-2xl">
+                <div className="bg-white rounded-3xl p-8 border-2 border-slate-200 shadow-2xl">
                     <div className="flex items-center gap-3 mb-6">
-                        <div className="w-12 h-12  bg-slate-100 rounded-2xl flex items-center justify-center">
-                            <Lock className="w-6 h-6 text-orange-500" />
+                        <div className="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center border-2 border-[#008080]">
+                            <Lock className="w-6 h-6 text-[#008080]" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-black text-slate-900">Ingreso</h2>
-                            <p className="text-sm text-slate-700">Ingresa tus credenciales</p>
+                            <h2 className="text-xl font-black text-slate-900">Ingreso Seguro</h2>
+                            <p className="text-sm text-slate-600">Ingresa tus credenciales</p>
                         </div>
                     </div>
 
                     <div className="space-y-5">
                         {/* DNI Input */}
                         <div>
-                            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
+                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
                                 Número de DNI
                             </label>
                             <input
@@ -119,30 +120,36 @@ const LoginScreen = ({ onLogin }) => {
                                 onChange={(e) => setDni(e.target.value)}
                                 onKeyPress={handleKeyPress}
                                 placeholder="12345678"
-                                className="w-full px-4 py-4  bg-slate-100 border-2 border-slate-300 rounded-2xl text-slate-900 placeholder:text-zinc-600 focus:outline-none focus:border-orange-500 font-bold text-lg"
+                                className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#008080] focus:bg-white font-bold text-lg transition-all"
                             />
+                            {dni && (
+                                <p className="text-xs text-teal-600 font-semibold mt-2 flex items-center gap-1">
+                                    <CheckCircle className="w-3 h-3" />
+                                    DNI detectado automáticamente
+                                </p>
+                            )}
                         </div>
 
                         {/* Llave Input */}
                         <div>
-                            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
-                                Llave de Acceso
+                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                                Llave de Acceso Personal
                             </label>
                             <input
                                 type="password"
                                 value={llave}
                                 onChange={(e) => setLlave(e.target.value)}
                                 onKeyPress={handleKeyPress}
-                                placeholder="Tu llave personal"
-                                className="w-full px-4 py-4  bg-slate-100 border-2 border-slate-300 rounded-2xl text-slate-900 placeholder:text-zinc-600 focus:outline-none focus:border-orange-500 font-bold text-lg"
+                                placeholder="Tu llave secreta"
+                                className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00A86B] focus:bg-white font-bold text-lg transition-all"
                             />
                         </div>
 
                         {/* Error Message */}
                         {error && (
-                            <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl">
-                                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-                                <p className="text-sm text-red-400 font-semibold">{error}</p>
+                            <div className="flex items-center gap-3 p-4 bg-red-50 border-2 border-red-200 rounded-2xl">
+                                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                                <p className="text-sm text-red-700 font-semibold">{error}</p>
                             </div>
                         )}
 
@@ -150,7 +157,7 @@ const LoginScreen = ({ onLogin }) => {
                         <button
                             onClick={handleLogin}
                             disabled={loading}
-                            className="w-full py-4 bg-gradient-to-r from-teal-500 to-emerald-600 text-slate-900 rounded-2xl font-black text-lg shadow-lg shadow-orange-500/20 hover:shadow-orange-500/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            className="w-full py-4 bg-gradient-to-r from-[#008080] to-[#00A86B] text-white rounded-2xl font-black text-lg shadow-lg shadow-teal-500/30 hover:shadow-teal-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                             {loading ? (
                                 <>
@@ -158,18 +165,33 @@ const LoginScreen = ({ onLogin }) => {
                                     Verificando...
                                 </>
                             ) : (
-                                'Ingresar al Campamento'
+                                <>
+                                    <CheckCircle className="w-5 h-5" />
+                                    Ingresar al Campamento
+                                </>
                             )}
                         </button>
                     </div>
 
                     {/* Footer Info */}
-                    <div className="mt-6 pt-6 border-t border-slate-200">
-                        <p className="text-xs text-slate-700 text-center">
-                            ¿Problemas para acceder? Contacta a tu líder de grupo
-                        </p>
+                    <div className="mt-6 pt-6 border-t-2 border-slate-100">
+                        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-3">
+                            <p className="text-xs text-blue-800 font-semibold text-center flex items-center justify-center gap-2">
+                                <AlertCircle className="w-4 h-4" />
+                                ¿Olvidaste tu llave? Contacta a tu líder de grupo
+                            </p>
+                        </div>
                     </div>
                 </div>
+
+                {/* Link para compartir */}
+                {!dni && (
+                    <div className="mt-6 text-center">
+                        <p className="text-sm text-slate-600">
+                            <strong>Tip:</strong> Si recibiste un link personalizado, úsalo para autocompletar tu DNI
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );
