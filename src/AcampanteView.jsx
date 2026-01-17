@@ -219,7 +219,16 @@ const interpretarActividad = (actividad, acampante, grupo) => {
             return actividad;
     }
 };
+const cargarAgenda = async (acampanteData, grupoData) => {
+    const snap = await getDocs(collection(db, 'agenda'));
 
+    const agenda = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => a.orden - b.orden)
+        .map(act => interpretarActividad(act, acampanteData, grupoData));
+
+    setAgendaHoy(agenda);
+};
 // Componente Principal de Vista del Acampante
 const AcampanteView = ({ dni, onLogout }) => {
     const [acampante, setAcampante] = useState(null);
@@ -281,16 +290,12 @@ const AcampanteView = ({ dni, onLogout }) => {
             ];
 
             //setAgendaHoy(agendaSimulada);
-            const cargarAgenda = async (acampanteData, grupoData) => {
-                const snap = await getDocs(collection(db, 'agenda'));
+            await cargarAgenda(acampanteData, grupoSnap.exists()
+                ? { id: grupoSnap.id, ...grupoSnap.data() }
+                : null,
+                setAgendaHoy
+            );
 
-                const agenda = snap.docs
-                    .map(doc => ({ id: doc.id, ...doc.data() }))
-                    .sort((a, b) => a.orden - b.orden)
-                    .map(act => interpretarActividad(act, acampanteData, grupoData));
-
-                setAgendaHoy(agenda);
-            };
 
             // Determinar actividad actual
             const ahora = new Date();
@@ -343,7 +348,7 @@ const AcampanteView = ({ dni, onLogout }) => {
             </div>
         );
     }
-    cargarAgenda(acampanteData, grupo);
+
 
     return (
         <div className="min-h-screen bg-white pb-32 relative overflow-x-hidden">
