@@ -258,10 +258,22 @@ const AcampanteView = ({ dni, onLogout }) => {
     const [actividadActual, setActividadActual] = useState(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('panel'); // panel | agenda
+
     useEffect(() => {
         loadAcampanteData();
     }, [dni]);
     useEffect(() => {
+        useEffect(() => {
+            if (!acampante || !grupos) return;
+
+            const grupoEncontrado = grupos.find(
+                g => g.id === acampante.grupo
+            );
+
+            setGrupo(grupoEncontrado || null);
+        }, [acampante, grupos]);
+
+
         if (!agendaHoy.length) return;
 
         const ahora = new Date();
@@ -511,6 +523,103 @@ const AcampanteView = ({ dni, onLogout }) => {
                         ))}
                     </section>
                 )}
+                {activeTab === 'grupo' && grupo && (
+                    <>
+                        <section className="space-y-6">
+
+                            {/* Header del grupo */}
+                            <div
+                                className="p-5 rounded-3xl text-white"
+                                style={{ backgroundColor: grupo.color || '#008080' }}
+                            >
+                                <p className="text-[10px] uppercase font-black tracking-widest opacity-80">
+                                    Tu Grupo
+                                </p>
+                                <h2 className="text-xl font-extrabold mt-1">
+                                    {grupo.nombre}
+                                </h2>
+                            </div>
+
+                            {/* Líder */}
+                            <div className="bg-white p-4 rounded-2xl border border-slate-100">
+                                <p className="text-[10px] font-black uppercase text-slate-400 mb-2">
+                                    Líder
+                                </p>
+
+                                <p className="text-lg font-bold text-[#001B3D]">
+                                    {grupo.lider_nombre}
+                                </p>
+
+                                <p className="text-sm text-slate-500">
+                                    📞 {grupo.telefono_lider}
+                                </p>
+                            </div>
+
+                            {/* Compañeros */}
+                            <div className="bg-white p-4 rounded-2xl border border-slate-100">
+                                <p className="text-[10px] font-black uppercase text-slate-400 mb-3">
+                                    Compañeros
+                                </p>
+
+                                <div className="space-y-2">
+                                    {grupo.miembros.map((id, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50"
+                                        >
+                                            <span className="text-sm font-medium text-[#001B3D]">
+                                                {id}
+                                            </span>
+
+                                            {id === grupo.lider_id && (
+                                                <span className="text-[9px] font-black text-[#008080] uppercase">
+                                                    Líder
+                                                </span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Tareas */}
+                            <div className="bg-white p-4 rounded-2xl border border-slate-100">
+                                <p className="text-[10px] font-black uppercase text-slate-400 mb-3">
+                                    Tareas del Grupo
+                                </p>
+
+                                <div className="space-y-2">
+                                    {grupo.tareas.map((tarea, idx) => (
+                                        <div
+                                            key={idx}
+                                            className={`flex items-center justify-between px-3 py-2 rounded-xl
+                                ${tarea.completada
+                                                    ? 'bg-[#E6F6F0] text-[#008080]'
+                                                    : 'bg-slate-50 text-slate-600'
+                                                }`}
+                                        >
+                                            <span className="text-sm font-bold">
+                                                {tarea.tarea}
+                                            </span>
+
+                                            <span className="text-[9px] font-black uppercase">
+                                                {tarea.completada ? 'Hecha' : 'Pendiente'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                        </section>
+                    </>
+                )}
+
+
+                {activeTab === 'grupo' && !grupo && (
+                    <p className="text-center text-slate-400">
+                        No tenés grupo asignado
+                    </p>
+                )}
+
 
                 {activeTab === 'panel' && (
                     <>
