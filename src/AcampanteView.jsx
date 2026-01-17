@@ -19,6 +19,8 @@ const firebaseConfig = {
 
 
 const FECHA_INICIO_CAMPAMENTO = new Date(2026, 0, 17); // 17 enero 2026
+const ahora = new Date();
+const minutosActuales = ahora.getHours() * 60 + ahora.getMinutes();
 
 // Componente de Login
 const LoginScreen = ({ onLogin }) => {
@@ -381,6 +383,26 @@ const AcampanteView = ({ dni, onLogout }) => {
         );
     }
 
+    // ==== PROXIMAS ACTIVIDADES ====
+    const ahoraRender = new Date();
+    const minutosAhoraRender =
+        ahoraRender.getHours() * 60 + ahoraRender.getMinutes();
+
+    const proximasActividades = agendaHoy
+        .filter(act => {
+            if (!act.hora) return false;
+
+            const [h, m] = act.hora.split(':').map(Number);
+            const inicio = h * 60 + m;
+
+            return inicio > minutosAhoraRender;
+        })
+        .sort((a, b) => {
+            const [h1, m1] = a.hora.split(':').map(Number);
+            const [h2, m2] = b.hora.split(':').map(Number);
+            return h1 * 60 + m1 - (h2 * 60 + m2);
+        })
+        .slice(0, 3);
 
     return (
         <div className="min-h-screen bg-white pb-32 relative overflow-x-hidden">
@@ -489,7 +511,8 @@ const AcampanteView = ({ dni, onLogout }) => {
                         <span className="text-[10px] font-bold text-slate-400">Hoy</span>
                     </div>
                     <div className="space-y-2">
-                        {agendaHoy.slice(0, 3).map((actividad, idx) => (
+                        {proximasActividades.map((actividad, idx) => (
+
                             <div key={idx} className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100" style={{ boxShadow: '0 4px 20px -2px rgba(0, 27, 61, 0.05)' }}>
                                 <div className="w-10 h-10 rounded-xl bg-[#F0F9F9] flex items-center justify-center text-[#008080]">
                                     <span className="text-2xl">{actividad.icon}</span>
