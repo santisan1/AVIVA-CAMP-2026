@@ -279,7 +279,7 @@ const AcampanteView = ({ dni, onLogout }) => {
             <div className="min-h-screen bg-white flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 className="w-16 h-16 text-[#008080] animate-spin mx-auto mb-4" />
-                    <p className="text-slate-700 font-bold text-lg">Estamos cargando, hola {acampante.nombre.split(' ')[0]}!</p>
+                    <p className="text-slate-700 font-bold text-lg">Cargando tu información...</p>
                 </div>t
             </div>
         );
