@@ -115,7 +115,7 @@ const QRScanner = ({ onScanSuccess }) => {
     } else if (error.name === 'NotReadableError') {
       return 'La cámara está siendo usada por otra aplicación.';
     }
-    return `Error de cámara: ${error.message}`;
+    return `Error de cámaara: ${error.message}`;
   };
 
   // Importante: Asegúrate de importar Html5Qrcode (sin el "Scanner" al final)
