@@ -18,6 +18,7 @@ const firebaseConfig = {
 
 
 
+const FECHA_INICIO_CAMPAMENTO = new Date(2026, 0, 17); // 17 enero 2026
 
 // Componente de Login
 const LoginScreen = ({ onLogin }) => {
@@ -219,16 +220,18 @@ const interpretarActividad = (actividad, acampante, grupo) => {
             return actividad;
     }
 };
-const cargarAgenda = async (acampanteData, grupoData, setAgendaHoy) => {
+const cargarAgenda = async (acampanteData, grupoData, setAgendaHoy, diaActual) => {
     const snap = await getDocs(collection(db, 'agenda'));
 
     const agenda = snap.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(act => act.dia === diaActual)
         .sort((a, b) => a.orden - b.orden)
         .map(act => interpretarActividad(act, acampanteData, grupoData));
 
     setAgendaHoy(agenda);
 };
+
 
 // Componente Principal de Vista del Acampante
 const AcampanteView = ({ dni, onLogout }) => {
@@ -242,9 +245,51 @@ const AcampanteView = ({ dni, onLogout }) => {
     useEffect(() => {
         loadAcampanteData();
     }, [dni]);
+    useEffect(() => {
+        if (!agendaHoy.length) return;
+
+        const ahora = new Date();
+        const minutosActuales = ahora.getHours() * 60 + ahora.getMinutes();
+
+        const actividadEnCurso = agendaHoy.find(act => {
+            if (!act.hora || !act.duracion) return false;
+
+            const [h, m] = act.hora.split(':').map(Number);
+            const inicio = h * 60 + m;
+            const fin = inicio + act.duracion;
+
+            return minutosActuales >= inicio && minutosActuales < fin;
+        });
+
+        if (actividadEnCurso) {
+            const [h, m] = actividadEnCurso.hora.split(':').map(Number);
+            const inicio = h * 60 + m;
+
+            const progreso =
+                ((minutosActuales - inicio) / actividadEnCurso.duracion) * 100;
+
+            setActividadActual({
+                ...actividadEnCurso,
+                progreso,
+                faltanMinutos:
+                    inicio + actividadEnCurso.duracion - minutosActuales
+            });
+        } else {
+            setActividadActual(null);
+        }
+    }, [agendaHoy]);
 
     const loadAcampanteData = async () => {
         let grupoData = null;
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+
+        const inicio = new Date(FECHA_INICIO_CAMPAMENTO);
+        inicio.setHours(0, 0, 0, 0);
+
+        const diaCampamento =
+            Math.floor((hoy - inicio) / (1000 * 60 * 60 * 24)) + 1;
+
 
         try {
             // 1. Cargar datos del acampante
@@ -295,38 +340,11 @@ const AcampanteView = ({ dni, onLogout }) => {
             ];
 
             //setAgendaHoy(agendaSimulada);
-            await cargarAgenda(acampanteData, grupoData, setAgendaHoy);
+            await cargarAgenda(acampanteData, grupoData, setAgendaHoy, diaCampamento);
 
 
 
             // Determinar actividad actual
-            const ahora = new Date();
-            const minutosActuales = ahora.getHours() * 60 + ahora.getMinutes();
-
-            const actividadEnCurso = agendaHoy.find(act => {
-                if (!act.hora || !act.duracion) return false;
-
-                const [h, m] = act.hora.split(':').map(Number);
-                const inicio = h * 60 + m;
-                const fin = inicio + act.duracion;
-
-                return minutosActuales >= inicio && minutosActuales < fin;
-            });
-
-            if (actividadEnCurso) {
-                const [h, m] = actividadEnCurso.hora.split(':').map(Number);
-                const inicio = h * 60 + m;
-
-                const progreso =
-                    ((minutosActuales - inicio) / actividadEnCurso.duracion) * 100;
-
-                setActividadActual({
-                    ...actividadEnCurso,
-                    progreso,
-                    faltanMinutos:
-                        inicio + actividadEnCurso.duracion - minutosActuales
-                });
-            }
 
             setLoading(false);
         } catch (error) {
