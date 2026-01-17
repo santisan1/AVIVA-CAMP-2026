@@ -29,33 +29,36 @@ const LoginScreen = ({ onLogin }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // 1. Efecto para capturar parámetros y Auto-Login
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const dniParam = params.get('dni');
-        const llaveParam = params.get('llave'); // Cambié 'key' por 'llave' para que coincida
+        const llaveParam = params.get('llave');
 
         if (dniParam) setDni(dniParam);
         if (llaveParam) setLlave(llaveParam);
 
-        // Si tenemos ambos, ejecutamos el login automáticamente
         if (dniParam && llaveParam) {
-            // Un pequeño delay de 500ms para que el usuario vea que se están completando los campos
-            // y no sienta que "pasó algo raro"
             const timer = setTimeout(() => {
                 ejecutarLogin(dniParam, llaveParam);
-            }, 2000);
+            }, 2000); // 2 segundos de delay para facha
             return () => clearTimeout(timer);
         }
     }, []);
 
-    // 2. Refactorizamos la lógica de login para que pueda recibir parámetros directos o del estado
+    // --- LA FUNCIÓN QUE FALTABA ---
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter') {
+            ejecutarLogin();
+        }
+    };
+
     const ejecutarLogin = async (dniLog, llaveLog) => {
         const d = dniLog || dni;
         const l = llaveLog || llave;
 
         if (!d || !l) {
-            setError('Faltan datos para ingresar');
+            setError('Por favor completa todos los campos');
+            setLoading(false);
             return;
         }
 
@@ -66,16 +69,21 @@ const LoginScreen = ({ onLogin }) => {
             const acampanteRef = doc(db, 'acampantes', d);
             const acampanteSnap = await getDoc(acampanteRef);
 
-            if (!acampanteSnap.exists() || acampanteSnap.data().llave !== l) {
-                setError('Credenciales incorrectas. Verificá el link o tus datos.');
+            if (!acampanteSnap.exists()) {
+                setError('DNI no encontrado.');
                 setLoading(false);
                 return;
             }
 
             const acampanteData = acampanteSnap.data();
 
-            // 3. LIMPIEZA DE URL: Borramos los parámetros antes de pasar a la siguiente pantalla
-            // Esto evita que si el usuario refresca, se vuelva a intentar loguear con datos viejos
+            if (acampanteData.llave !== l) {
+                setError('Llave de acceso incorrecta.');
+                setLoading(false);
+                return;
+            }
+
+            // Limpieza de URL
             const nuevaUrl = window.location.pathname;
             window.history.replaceState({}, document.title, nuevaUrl);
 
@@ -92,8 +100,6 @@ const LoginScreen = ({ onLogin }) => {
             setLoading(false);
         }
     };
-
-    // ... el resto de tu return y el botón ahora llamaría a ejecutarLogin()
 
     return (
         <div className="min-h-screen bg-white flex items-center justify-center p-6">
@@ -133,7 +139,7 @@ const LoginScreen = ({ onLogin }) => {
                             {dni && (
                                 <p className="text-xs text-[#00A86B] font-semibold mt-2 flex items-center gap-1">
                                     <CheckCircle className="w-3 h-3" />
-                                    DNI detectado automáticamente
+                                    DNI detectado correctamente
                                 </p>
                             )}
                         </div>
@@ -160,7 +166,7 @@ const LoginScreen = ({ onLogin }) => {
                         )}
 
                         <button
-                            onClick={ejecutarLogin()}
+                            onClick={() => ejecutarLogin()} // CORREGIDO: Usamos función anónima
                             disabled={loading}
                             className="w-full py-4 bg-gradient-to-r from-[#008080] to-[#00A86B] text-white rounded-2xl font-black text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             style={{ boxShadow: '0 4px 20px -2px rgba(0, 128, 128, 0.3)' }}
@@ -188,14 +194,6 @@ const LoginScreen = ({ onLogin }) => {
                         </div>
                     </div>
                 </div>
-
-                {!dni && (
-                    <div className="mt-6 text-center">
-                        <p className="text-sm text-slate-600">
-                            <strong>Tip:</strong> Si recibiste un link personalizado, úsalo para autocompletar tu DNI
-                        </p>
-                    </div>
-                )}
             </div>
         </div>
     );
