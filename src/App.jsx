@@ -2117,22 +2117,44 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
 };
 
 
-
 const SearchView = ({ acampantes, onSelectAcampante }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [filtros, setFiltros] = useState({
+    presente: null, // null, true, false
+    kitEntregado: null,
+    tieneTaller: null,
+    provincia: '',
+    grupo: ''
+  });
 
-  const filtered = acampantes.filter(a =>
-    a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    a.dni.includes(searchTerm)
-  );
+  const filtered = acampantes.filter(a => {
+    // Filtro de búsqueda
+    const matchSearch = a.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      a.dni.includes(searchTerm);
+
+    // Filtros adicionales
+    const matchPresente = filtros.presente === null || a.presente === filtros.presente;
+    const matchKit = filtros.kitEntregado === null || a.kit_entregado === filtros.kitEntregado;
+    const matchTaller = filtros.tieneTaller === null || (filtros.tieneTaller ? !!a.taller : !a.taller);
+    const matchProvincia = !filtros.provincia || a.provincia === filtros.provincia;
+    const matchGrupo = !filtros.grupo || a.grupo === filtros.grupo;
+
+    return matchSearch && matchPresente && matchKit && matchTaller && matchProvincia && matchGrupo;
+  });
+
+  const provincias = [...new Set(acampantes.map(a => a.provincia).filter(Boolean))].sort();
+  const grupos = [...new Set(acampantes.map(a => a.grupo).filter(Boolean))].sort();
 
   return (
     <div className="space-y-6 pb-24 max-w-7xl mx-auto">
       <div className="bg-gradient-to-br from-emerald-50 to-white p-6 rounded-3xl border-2 border-slate-200">
-        <h1 className="text-4xl font-black text-slate-900">Búsqueda</h1>
-        <p className="text-slate-600 font-semibold mt-2">Encuentra participantes por nombre o DNI</p>
+        <h1 className="text-4xl font-black text-slate-900">Búsqueda Avanzada</h1>
+        <p className="text-slate-600 font-semibold mt-2">
+          {filtered.length} de {acampantes.length} participantes
+        </p>
       </div>
 
+      {/* Buscador principal */}
       <div className="bg-white p-4 rounded-2xl border-2 border-slate-200 shadow-lg">
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -2146,6 +2168,89 @@ const SearchView = ({ acampantes, onSelectAcampante }) => {
         </div>
       </div>
 
+      {/* Filtros */}
+      <div className="bg-white p-6 rounded-2xl border-2 border-slate-200 shadow-lg">
+        <h3 className="text-sm font-black text-slate-900 mb-4">FILTROS</h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Filtro de presencia */}
+          <div>
+            <label className="text-xs font-bold text-slate-600 mb-2 block">Estado</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setFiltros({ ...filtros, presente: null })}
+                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all ${filtros.presente === null ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'
+                  }`}
+              >
+                Todos
+              </button>
+              <button
+                onClick={() => setFiltros({ ...filtros, presente: true })}
+                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all ${filtros.presente === true ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-700'
+                  }`}
+              >
+                Presentes
+              </button>
+              <button
+                onClick={() => setFiltros({ ...filtros, presente: false })}
+                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all ${filtros.presente === false ? 'bg-orange-600 text-white' : 'bg-slate-100 text-slate-700'
+                  }`}
+              >
+                Ausentes
+              </button>
+            </div>
+          </div>
+
+          {/* Filtro de provincia */}
+          <div>
+            <label className="text-xs font-bold text-slate-600 mb-2 block">Provincia</label>
+            <select
+              value={filtros.provincia}
+              onChange={(e) => setFiltros({ ...filtros, provincia: e.target.value })}
+              className="w-full py-2 px-3 rounded-lg border-2 border-slate-200 font-semibold"
+            >
+              <option value="">Todas las provincias</option>
+              {provincias.map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filtro de grupo */}
+          <div>
+            <label className="text-xs font-bold text-slate-600 mb-2 block">Grupo</label>
+            <select
+              value={filtros.grupo}
+              onChange={(e) => setFiltros({ ...filtros, grupo: e.target.value })}
+              className="w-full py-2 px-3 rounded-lg border-2 border-slate-200 font-semibold"
+            >
+              <option value="">Todos los grupos</option>
+              {grupos.map(g => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Botón limpiar filtros */}
+        <button
+          onClick={() => {
+            setSearchTerm('');
+            setFiltros({
+              presente: null,
+              kitEntregado: null,
+              tieneTaller: null,
+              provincia: '',
+              grupo: ''
+            });
+          }}
+          className="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-sm"
+        >
+          Limpiar filtros
+        </button>
+      </div>
+
+      {/* Resultados */}
       <div className="space-y-3">
         {filtered.map((a, i) => (
           <div
@@ -2160,29 +2265,53 @@ const SearchView = ({ acampantes, onSelectAcampante }) => {
                 </div>
                 <div>
                   <p className="text-lg font-black text-slate-900">{a.nombre}</p>
-                  <p className="text-sm text-slate-600 font-semibold">DNI: {a.dni} • {a.iglesia || 'Sin iglesia'}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-sm text-slate-600 font-semibold">DNI: {a.dni}</span>
+                    {a.grupo && (
+                      <>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                          {a.grupo}
+                        </span>
+                      </>
+                    )}
+                    {a.provincia && (
+                      <>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-xs text-slate-500">{a.provincia}</span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-              {a.presente && (
-                <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl border-2 border-emerald-200">
-                  <CheckCircle className="w-5 h-5" strokeWidth={2.5} />
-                  <span className="font-bold text-sm">Presente</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {a.presente && (
+                  <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl border-2 border-emerald-200">
+                    <CheckCircle className="w-5 h-5" strokeWidth={2.5} />
+                    <span className="font-bold text-sm">Presente</span>
+                  </div>
+                )}
+                {a.kit_entregado && (
+                  <div className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-2 rounded-xl">
+                    <Package className="w-4 h-4" />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         ))}
-        {filtered.length === 0 && searchTerm && (
+        {filtered.length === 0 && (
           <div className="bg-white rounded-2xl p-12 border-2 border-slate-200 text-center">
             <Search className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-500 font-semibold text-lg">No se encontraron resultados</p>
-            <p className="text-slate-400 text-sm mt-2">Intenta con otro término de búsqueda</p>
+            <p className="text-slate-400 text-sm mt-2">Ajusta los filtros o el término de búsqueda</p>
           </div>
         )}
       </div>
     </div>
   );
 };
+
 
 const TalleresView = ({ acampantes, onSelectAcampante }) => {
   const talleres = {};
