@@ -672,10 +672,10 @@ const AcampanteView = ({ dni, onLogout }) => {
                 >
                     <Home
                         className="w-6 h-6"
-                        style={{ fill: activeTab === 'panel' ? 'currentColor' : 'none' }}
+                        style={{ fill: activeTab === 'agenda' ? 'currentColor' : 'none' }}
                     />
                     <span className="text-[9px] font-bold uppercase tracking-tighter">
-                        Panel
+                        AGENDA
                     </span>
                 </button>
 
