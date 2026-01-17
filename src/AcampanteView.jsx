@@ -665,7 +665,7 @@ const AcampanteView = ({ dni, onLogout }) => {
                 <button
                     onClick={() => setActiveTab('agenda')}
                     className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl border-[1.5px] transition-all
-    ${activeTab === 'panel'
+    ${activeTab === 'agenda'
                             ? 'text-[#00A86B] bg-[#E6F6F0] border-[#00A86B]'
                             : 'text-[#001B3D]/60 border-transparent hover:text-[#001B3D]'
                         }`}
