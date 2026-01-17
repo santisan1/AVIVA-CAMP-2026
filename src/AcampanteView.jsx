@@ -463,10 +463,6 @@ const AcampanteView = ({ dni, onLogout }) => {
             </header>
 
             <main className="px-5 space-y-6">
-                {/* Tu Estado */}
-
-
-
                 {activeTab === 'agenda' && (
                     <section className="space-y-6">
                         {Object.keys(agendaPorDia).map(dia => (
@@ -477,13 +473,13 @@ const AcampanteView = ({ dni, onLogout }) => {
 
                                 <div className="space-y-2">
                                     {agendaPorDia[dia].map((actividad, idx) => {
-
                                         const enCurso = actividadActual?.id === actividad.id;
+
                                         return (
                                             <div
                                                 key={idx}
                                                 className={`flex items-center gap-4 p-4 rounded-2xl border 
-                                ${enCurso
+                                    ${enCurso
                                                         ? 'border-[#008080] bg-[#F0F9F9]'
                                                         : 'border-slate-100 bg-white'
                                                     }`}
@@ -516,112 +512,153 @@ const AcampanteView = ({ dni, onLogout }) => {
                     </section>
                 )}
 
-                <section>
-                    <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 px-1">Tu Estado</h2>
-                    <div className="grid grid-cols-2 gap-3">
-                        {/* Ubicación */}
-                        <div className="bg-[#F8FAFB] p-4 rounded-2xl flex flex-col aspect-square justify-between border border-slate-100">
-                            <MapPin className="w-6 h-6 text-[#001B3D]" />
-                            <div>
-                                <p className="text-[10px] font-bold text-slate-500 uppercase">Ubicación</p>
-                                <p className="text-lg font-bold text-[#001B3D]">
-                                    {habitacion ? `${habitacion.tipo} ${habitacion.numero}` : acampante.habitacion || 'Sin asignar'}
-                                </p>
-                                {habitacion && (
-                                    <p className="text-xs text-slate-500 mt-1">Piso {habitacion.piso}</p>
-                                )}
-                            </div>
-                        </div>
+                {activeTab === 'panel' && (
+                    <>
+                        {/* Tu Estado */}
+                        <section>
+                            <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 px-1">
+                                Tu Estado
+                            </h2>
 
-                        {/* Equipo (con color del grupo) */}
-                        <div
-                            className="p-4 rounded-2xl flex flex-col aspect-square justify-between text-white shadow-lg"
-                            style={{
-                                backgroundColor: grupo?.color || '#008080',
-                                boxShadow: '0 4px 20px -2px rgba(0, 128, 128, 0.1)'
-                            }}
-                        >
-                            <Users className="w-6 h-6 text-white" style={{ fill: 'currentColor' }} />
-                            <div>
-                                <p className="text-[10px] font-black text-white/70 uppercase tracking-tighter">Equipo</p>
-                                <p className="text-lg font-extrabold leading-tight">
-                                    {grupo?.nombre || 'Sin grupo'}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-[#F8FAFB] p-4 rounded-2xl flex flex-col aspect-square justify-between border border-slate-100">
+                                    <MapPin className="w-6 h-6 text-[#001B3D]" />
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase">
+                                            Ubicación
+                                        </p>
+                                        <p className="text-lg font-bold text-[#001B3D]">
+                                            {habitacion
+                                                ? `${habitacion.tipo} ${habitacion.numero}`
+                                                : acampante.habitacion || 'Sin asignar'}
+                                        </p>
+                                        {habitacion && (
+                                            <p className="text-xs text-slate-500 mt-1">
+                                                Piso {habitacion.piso}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
 
-                {/* Actividad En Curso */}
-                {actividadActual && (
-                    <section>
-                        <div className="bg-white p-5 rounded-3xl border-2 border-[#008080]/20 relative overflow-hidden" style={{ boxShadow: '0 4px 20px -2px rgba(0, 27, 61, 0.05)' }}>
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="space-y-0.5">
-                                    <span className="text-[10px] font-black text-[#008080] uppercase tracking-widest">En Curso</span>
-                                    <h3 className="text-xl font-extrabold text-[#001B3D]">{actividadActual.titulo}</h3>
-                                    <p className="text-slate-500 text-sm flex items-center gap-1">
-                                        <MapPin className="w-4 h-4" />
-                                        {actividadActual.ubicacion}
-                                    </p>
-                                </div>
-                                <div className="bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase text-center leading-none mb-0.5">Faltan</p>
-                                    <p className="text-sm font-black text-[#008080] text-center">{actividadActual.faltanMinutos}m</p>
-                                </div>
-                            </div>
-                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                                 <div
-                                    className="h-full bg-[#008080] rounded-full transition-all"
-                                    style={{ width: `${actividadActual.progreso}%` }}
-                                ></div>
-                            </div>
-                        </div>
-                    </section>
-                )}
-
-                {/* Próximamente */}
-                <section>
-                    <div className="flex items-center justify-between mb-3 px-1">
-                        <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Próximamente</h2>
-                        <span className="text-[10px] font-bold text-slate-400">Hoy</span>
-                    </div>
-                    <div className="space-y-2">
-                        {proximasActividades.map((actividad, idx) => (
-
-                            <div key={idx} className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100" style={{ boxShadow: '0 4px 20px -2px rgba(0, 27, 61, 0.05)' }}>
-                                <div className="w-10 h-10 rounded-xl bg-[#F0F9F9] flex items-center justify-center text-[#008080]">
-                                    <span className="text-2xl">{actividad.icon}</span>
-                                </div>
-                                <div className="flex-1">
-                                    <p className="text-sm font-bold text-[#001B3D]">{actividad.titulo}</p>
-                                    <p className="text-[11px] text-slate-500">{actividad.ubicacion}</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-xs font-bold text-slate-400">{actividad.hora}</p>
+                                    className="p-4 rounded-2xl flex flex-col aspect-square justify-between text-white shadow-lg"
+                                    style={{
+                                        backgroundColor: grupo?.color || '#008080',
+                                        boxShadow: '0 4px 20px -2px rgba(0, 128, 128, 0.1)'
+                                    }}
+                                >
+                                    <Users className="w-6 h-6 text-white" style={{ fill: 'currentColor' }} />
+                                    <div>
+                                        <p className="text-[10px] font-black text-white/70 uppercase tracking-tighter">
+                                            Equipo
+                                        </p>
+                                        <p className="text-lg font-extrabold leading-tight">
+                                            {grupo?.nombre || 'Sin grupo'}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                </section>
+                        </section>
 
-                {/* Aviso de Dieta (si aplica) */}
-                {acampante.dieta && acampante.dieta !== 'Ninguna' && (
-                    <section>
-                        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
-                            <div className="flex items-start gap-3">
-                                <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                                <div>
-                                    <p className="text-sm font-bold text-blue-900">Recordatorio de Dieta</p>
-                                    <p className="text-xs text-blue-700 mt-1">
-                                        Tu dieta registrada: <span className="font-bold">{acampante.dieta}</span>
-                                    </p>
+                        {/* Actividad En Curso */}
+                        {actividadActual && (
+                            <section>
+                                <div className="bg-white p-5 rounded-3xl border-2 border-[#008080]/20 relative overflow-hidden">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="space-y-0.5">
+                                            <span className="text-[10px] font-black text-[#008080] uppercase tracking-widest">
+                                                En Curso
+                                            </span>
+                                            <h3 className="text-xl font-extrabold text-[#001B3D]">
+                                                {actividadActual.titulo}
+                                            </h3>
+                                            <p className="text-slate-500 text-sm flex items-center gap-1">
+                                                <MapPin className="w-4 h-4" />
+                                                {actividadActual.ubicacion}
+                                            </p>
+                                        </div>
+
+                                        <div className="bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase text-center">
+                                                Faltan
+                                            </p>
+                                            <p className="text-sm font-black text-[#008080] text-center">
+                                                {actividadActual.faltanMinutos}m
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-[#008080] rounded-full transition-all"
+                                            style={{ width: `${actividadActual.progreso}%` }}
+                                        />
+                                    </div>
                                 </div>
+                            </section>
+                        )}
+
+                        {/* Próximamente */}
+                        <section>
+                            <div className="flex items-center justify-between mb-3 px-1">
+                                <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
+                                    Próximamente
+                                </h2>
+                                <span className="text-[10px] font-bold text-slate-400">Hoy</span>
                             </div>
-                        </div>
-                    </section>
+
+                            <div className="space-y-2">
+                                {proximasActividades.map((actividad, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100"
+                                    >
+                                        <div className="w-10 h-10 rounded-xl bg-[#F0F9F9] flex items-center justify-center text-[#008080]">
+                                            <span className="text-2xl">{actividad.icon}</span>
+                                        </div>
+
+                                        <div className="flex-1">
+                                            <p className="text-sm font-bold text-[#001B3D]">
+                                                {actividad.titulo}
+                                            </p>
+                                            <p className="text-[11px] text-slate-500">
+                                                {actividad.ubicacion}
+                                            </p>
+                                        </div>
+
+                                        <div className="text-right">
+                                            <p className="text-xs font-bold text-slate-400">
+                                                {actividad.hora}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+
+                        {/* Aviso de Dieta */}
+                        {acampante.dieta && acampante.dieta !== 'Ninguna' && (
+                            <section>
+                                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                                    <div className="flex items-start gap-3">
+                                        <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+                                        <div>
+                                            <p className="text-sm font-bold text-blue-900">
+                                                Recordatorio de Dieta
+                                            </p>
+                                            <p className="text-xs text-blue-700 mt-1">
+                                                Tu dieta registrada:{' '}
+                                                <span className="font-bold">{acampante.dieta}</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        )}
+                    </>
                 )}
             </main>
+
 
             {/* Botón flotante de WhatsApp (si hay líder) */}
             {grupo?.telefono_lider && (
