@@ -258,20 +258,14 @@ const AcampanteView = ({ dni, onLogout }) => {
     const [actividadActual, setActividadActual] = useState(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('panel'); // panel | agenda
+    const [companeros, setCompaneros] = useState([]);
+
 
     useEffect(() => {
         loadAcampanteData();
     }, [dni]);
     useEffect(() => {
-        useEffect(() => {
-            if (!acampante || !grupos) return;
 
-            const grupoEncontrado = grupos.find(
-                g => g.id === acampante.grupo
-            );
-
-            setGrupo(grupoEncontrado || null);
-        }, [acampante, grupos]);
 
 
         if (!agendaHoy.length) return;
@@ -306,6 +300,34 @@ const AcampanteView = ({ dni, onLogout }) => {
             setActividadActual(null);
         }
     }, [agendaHoy]);
+    useEffect(() => {
+        if (!grupo?.miembros?.length) return;
+
+        const cargarCompaneros = async () => {
+            try {
+                const promises = grupo.miembros.map(async (dni) => {
+                    const ref = doc(db, 'acampantes', dni);
+                    const snap = await getDoc(ref);
+
+                    if (!snap.exists()) return null;
+
+                    return {
+                        id: snap.id,
+                        nombre: snap.data().nombre,
+                        edad: snap.data().edad,
+                        sexo: snap.data().sexo
+                    };
+                });
+
+                const resultados = await Promise.all(promises);
+                setCompaneros(resultados.filter(Boolean));
+            } catch (err) {
+                console.error('Error cargando compañeros', err);
+            }
+        };
+
+        cargarCompaneros();
+    }, [grupo]);
 
     const loadAcampanteData = async () => {
         let grupoData = null;
@@ -562,22 +584,28 @@ const AcampanteView = ({ dni, onLogout }) => {
                                 </p>
 
                                 <div className="space-y-2">
-                                    {grupo.miembros.map((id, idx) => (
+                                    {companeros.map((c, idx) => (
                                         <div
                                             key={idx}
                                             className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50"
                                         >
-                                            <span className="text-sm font-medium text-[#001B3D]">
-                                                {id}
-                                            </span>
+                                            <div>
+                                                <p className="text-sm font-bold text-[#001B3D]">
+                                                    {c.nombre}
+                                                </p>
+                                                <p className="text-[11px] text-slate-500">
+                                                    {c.edad} años · {c.sexo}
+                                                </p>
+                                            </div>
 
-                                            {id === grupo.lider_id && (
+                                            {c.id === grupo.lider_id && (
                                                 <span className="text-[9px] font-black text-[#008080] uppercase">
                                                     Líder
                                                 </span>
                                             )}
                                         </div>
                                     ))}
+
                                 </div>
                             </div>
 
