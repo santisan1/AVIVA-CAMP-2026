@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { Home, MapPin, Users, Calendar, Phone, Bell, LogOut, Lock, Loader2, AlertCircle } from 'lucide-react';
 
+import {
+    getFirestore, doc, getDoc, collection, query, where, getDocs, collection, getDocs, doc, updateDoc,
+    serverTimestamp, onSnapshot
+} from 'firebase/firestore';
+import { Home, MapPin, Users, Calendar, Phone, Bell, LogOut, Lock, Loader2, AlertCircle } from 'lucide-react';
+import { db } from "../firebase"; // ajustá la ruta
 // Firebase Configuration (reemplazar con tus credenciales reales)
 const firebaseConfig = {
     apiKey: "AIzaSyDfake-key-replace-with-real",
@@ -13,8 +16,8 @@ const firebaseConfig = {
     appId: "1:123456789:web:abcdef"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+
+
 
 // Componente de Login
 const LoginScreen = ({ onLogin }) => {

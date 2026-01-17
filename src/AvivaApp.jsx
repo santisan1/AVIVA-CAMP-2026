@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 
 import { Html5Qrcode } from 'html5-qrcode';
+import { db } from "../firebase";
 
 // Firebase Configuration
 const firebaseConfig = {
@@ -20,8 +21,7 @@ const firebaseConfig = {
     appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+
 
 const Notification = ({ type, message, onClose }) => {
     useEffect(() => {
