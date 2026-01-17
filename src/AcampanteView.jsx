@@ -301,19 +301,31 @@ const AcampanteView = ({ dni, onLogout }) => {
 
             // Determinar actividad actual
             const ahora = new Date();
-            const horaActual = ahora.getHours() * 60 + ahora.getMinutes();
+            const minutosActuales = ahora.getHours() * 60 + ahora.getMinutes();
 
-            for (let actividad of agendaSimulada) {
-                const [h, m] = actividad.hora.split(':').map(Number);
-                const minutos = h * 60 + m;
-                const minutosFin = minutos + actividad.duracion;
+            const actividadEnCurso = agendaHoy.find(act => {
+                if (!act.hora || !act.duracion) return false;
 
-                if (horaActual >= minutos && horaActual < minutosFin) {
-                    const progreso = ((horaActual - minutos) / actividad.duracion) * 100;
-                    const faltanMinutos = minutosFin - horaActual;
-                    setActividadActual({ ...actividad, progreso, faltanMinutos });
-                    break;
-                }
+                const [h, m] = act.hora.split(':').map(Number);
+                const inicio = h * 60 + m;
+                const fin = inicio + act.duracion;
+
+                return minutosActuales >= inicio && minutosActuales < fin;
+            });
+
+            if (actividadEnCurso) {
+                const [h, m] = actividadEnCurso.hora.split(':').map(Number);
+                const inicio = h * 60 + m;
+
+                const progreso =
+                    ((minutosActuales - inicio) / actividadEnCurso.duracion) * 100;
+
+                setActividadActual({
+                    ...actividadEnCurso,
+                    progreso,
+                    faltanMinutos:
+                        inicio + actividadEnCurso.duracion - minutosActuales
+                });
             }
 
             setLoading(false);
