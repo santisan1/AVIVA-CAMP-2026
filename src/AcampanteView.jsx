@@ -664,14 +664,21 @@ const AcampanteView = ({ dni, onLogout }) => {
 
                 <button
                     onClick={() => setActiveTab('agenda')}
-                    className={`flex flex-col items-center gap-1 px-3 transition-colors
-                      ${activeTab === 'agenda'
-                            ? 'text-[#00A86B] bg-[#E6F6F0] border-[1.5px] border-[#00A86B] rounded-xl'
-                            : 'text-[#001B3D]/60 hover:text-[#001B3D]'
+                    className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl border-[1.5px] transition-all
+    ${activeTab === 'panel'
+                            ? 'text-[#00A86B] bg-[#E6F6F0] border-[#00A86B]'
+                            : 'text-[#001B3D]/60 border-transparent hover:text-[#001B3D]'
                         }`}
                 >
-
+                    <Home
+                        className="w-6 h-6"
+                        style={{ fill: activeTab === 'panel' ? 'currentColor' : 'none' }}
+                    />
+                    <span className="text-[9px] font-bold uppercase tracking-tighter">
+                        Panel
+                    </span>
                 </button>
+
                 <button className="flex flex-col items-center gap-1 text-[#001B3D]/60 px-3 hover:text-[#001B3D] transition-colors">
                     <Users className="w-6 h-6" />
                     <span className="text-[9px] font-bold uppercase tracking-tighter">Grupo</span>
