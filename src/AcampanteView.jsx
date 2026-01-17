@@ -276,9 +276,9 @@ const AcampanteView = ({ dni, onLogout }) => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-black flex items-center justify-center">
+            <div className="min-h-screen bg-white flex items-center justify-center">
                 <div className="text-center">
-                    <Loader2 className="w-16 h-16 text-orange-500 animate-spin mx-auto mb-4" />
+                    <Loader2 className="w-16 h-16 text-[#008080] animate-spin mx-auto mb-4" />
                     <p className="text-white font-bold text-lg">Cargando tu información...</p>
                 </div>
             </div>
