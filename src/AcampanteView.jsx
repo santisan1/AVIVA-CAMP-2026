@@ -219,7 +219,7 @@ const interpretarActividad = (actividad, acampante, grupo) => {
             return actividad;
     }
 };
-const cargarAgenda = async (acampanteData, grupoData) => {
+const cargarAgenda = async (acampanteData, grupoData, setAgendaHoy) => {
     const snap = await getDocs(collection(db, 'agenda'));
 
     const agenda = snap.docs
@@ -229,6 +229,7 @@ const cargarAgenda = async (acampanteData, grupoData) => {
 
     setAgendaHoy(agenda);
 };
+
 // Componente Principal de Vista del Acampante
 const AcampanteView = ({ dni, onLogout }) => {
     const [acampante, setAcampante] = useState(null);
@@ -243,6 +244,8 @@ const AcampanteView = ({ dni, onLogout }) => {
     }, [dni]);
 
     const loadAcampanteData = async () => {
+        let grupoData = null;
+
         try {
             // 1. Cargar datos del acampante
             const acampanteRef = doc(db, 'acampantes', dni);
@@ -260,8 +263,10 @@ const AcampanteView = ({ dni, onLogout }) => {
             if (acampanteData.grupo) {
                 const grupoRef = doc(db, 'grupos_pequenos', acampanteData.grupo);
                 const grupoSnap = await getDoc(grupoRef);
+
                 if (grupoSnap.exists()) {
-                    setGrupo({ id: grupoSnap.id, ...grupoSnap.data() });
+                    grupoData = { id: grupoSnap.id, ...grupoSnap.data() };
+                    setGrupo(grupoData);
                 }
             }
 
@@ -290,11 +295,8 @@ const AcampanteView = ({ dni, onLogout }) => {
             ];
 
             //setAgendaHoy(agendaSimulada);
-            await cargarAgenda(acampanteData, grupoSnap.exists()
-                ? { id: grupoSnap.id, ...grupoSnap.data() }
-                : null,
-                setAgendaHoy
-            );
+            await cargarAgenda(acampanteData, grupoData, setAgendaHoy);
+
 
 
             // Determinar actividad actual
