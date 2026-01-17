@@ -223,7 +223,8 @@ const AcampanteView = ({ dni, onLogout }) => {
                     setGrupo({ id: grupoSnap.id, ...grupoSnap.data() });
                 }
             }
-
+            console.log('Grupo ID desde acampante:', acampanteData.grupo);
+            console.log('Grupo existe?', grupoSnap.exists());
             // 3. Cargar habitación
             if (acampanteData.habitacion) {
                 const habitacionesQuery = query(
