@@ -4,7 +4,7 @@ import {
     getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc,
     serverTimestamp, onSnapshot
 } from 'firebase/firestore';
-import { Home, MapPin, Users, Calendar, Phone, Bell, LogOut, Lock, Loader2, AlertCircle } from 'lucide-react';
+import { Home, MapPin, Users, Calendar, Phone, Bell, LogOut, Lock, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { db } from "./firebase"; // ajustá la ruta
 // Firebase Configuration (reemplazar con tus credenciales reales)
 const firebaseConfig = {
