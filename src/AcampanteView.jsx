@@ -464,6 +464,9 @@ const AcampanteView = ({ dni, onLogout }) => {
 
             <main className="px-5 space-y-6">
                 {/* Tu Estado */}
+
+
+
                 {activeTab === 'agenda' && (
                     <section className="space-y-6">
                         {Object.keys(agendaPorDia).map(dia => (
@@ -474,17 +477,8 @@ const AcampanteView = ({ dni, onLogout }) => {
 
                                 <div className="space-y-2">
                                     {agendaPorDia[dia].map((actividad, idx) => {
-                                        const [h, m] = actividad.hora.split(':').map(Number);
-                                        const inicio = h * 60 + m;
-                                        const fin = inicio + (actividad.duracion || 0);
-                                        const enCurso =
-                                            dia === Math.floor(
-                                                (new Date() - FECHA_INICIO_CAMPAMENTO) /
-                                                (1000 * 60 * 60 * 24)
-                                            ) + 1 &&
-                                            minutosAhoraRender >= inicio &&
-                                            minutosAhoraRender < fin;
 
+                                        const enCurso = actividadActual?.id === actividad.id;
                                         return (
                                             <div
                                                 key={idx}
