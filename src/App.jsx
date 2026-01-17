@@ -2512,9 +2512,7 @@ export default function AvivaApp() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSync, setLastSync] = useState(null);
 
-  useEffect(() => {
-    loadAcampantes();
-  }, []);
+
   const handleUpdateHabitacion = async (dni, nuevaHabitacion) => {
     try {
       const acampanteRef = doc(db, 'acampantes', dni);
