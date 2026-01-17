@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 import { Html5Qrcode } from 'html5-qrcode';
-import { db } from "../firebase";
+import { db } from "./firebase";
 
 // Firebase Configuration
 const firebaseConfig = {

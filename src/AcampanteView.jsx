@@ -5,7 +5,7 @@ import {
     serverTimestamp, onSnapshot
 } from 'firebase/firestore';
 import { Home, MapPin, Users, Calendar, Phone, Bell, LogOut, Lock, Loader2, AlertCircle } from 'lucide-react';
-import { db } from "../firebase"; // ajustá la ruta
+import { db } from "./firebase"; // ajustá la ruta
 // Firebase Configuration (reemplazar con tus credenciales reales)
 const firebaseConfig = {
     apiKey: "AIzaSyDfake-key-replace-with-real",
