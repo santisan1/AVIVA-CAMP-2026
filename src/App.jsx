@@ -2571,24 +2571,7 @@ export default function AvivaApp() {
     return () => unsubscribeAcampantes();
   }, []);
 
-  const handleForceRefresh = async () => {
-    setIsSyncing(true);
-    try {
-      await loadAcampantes();
-      setLastSync(new Date());
-      setNotification({
-        type: 'success',
-        message: '✓ Datos sincronizados correctamente'
-      });
-    } catch (error) {
-      setNotification({
-        type: 'error',
-        message: '✗ Error al sincronizar datos'
-      });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+
 
   const handleScan = (dni) => {
     const acampante = acampantes.find(a => a.dni === dni);
