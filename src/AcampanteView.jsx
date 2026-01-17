@@ -529,7 +529,7 @@ const AcampanteView = ({ dni, onLogout }) => {
                                         </p>
                                         <p className="text-lg font-bold text-[#001B3D]">
                                             {habitacion
-                                                ? `${habitacion.tipo} ${habitacion.numero}`
+                                                ? `${habitacion.numero} `
                                                 : acampante.habitacion || 'Sin asignar'}
                                         </p>
                                         {habitacion && (
