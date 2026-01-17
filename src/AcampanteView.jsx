@@ -126,7 +126,7 @@ const LoginScreen = ({ onLogin }) => {
                                 type="text"
                                 value={dni}
                                 onChange={(e) => setDni(e.target.value)}
-
+                                onKeyPress={handleKeyPress}
                                 placeholder="12345678"
                                 className="w-full px-4 py-4 bg-[#F8FAFB] border border-slate-100 rounded-2xl text-[#001B3D] placeholder:text-slate-400 focus:outline-none focus:border-[#008080] focus:bg-white font-bold text-lg transition-all"
                             />
@@ -146,7 +146,7 @@ const LoginScreen = ({ onLogin }) => {
                                 type="password"
                                 value={llave}
                                 onChange={(e) => setLlave(e.target.value)}
-
+                                onKeyPress={handleKeyPress}
                                 placeholder="Tu llave secreta"
                                 className="w-full px-4 py-4 bg-[#F8FAFB] border border-slate-100 rounded-2xl text-[#001B3D] placeholder:text-slate-400 focus:outline-none focus:border-[#00A86B] focus:bg-white font-bold text-lg transition-all"
                             />
