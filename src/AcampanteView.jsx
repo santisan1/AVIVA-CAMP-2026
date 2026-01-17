@@ -29,18 +29,33 @@ const LoginScreen = ({ onLogin }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // Extraer DNI de la URL y autocompletar
+    // 1. Efecto para capturar parámetros y Auto-Login
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const dniParam = params.get('dni');
-        if (dniParam) {
-            setDni(dniParam);
+        const llaveParam = params.get('llave'); // Cambié 'key' por 'llave' para que coincida
+
+        if (dniParam) setDni(dniParam);
+        if (llaveParam) setLlave(llaveParam);
+
+        // Si tenemos ambos, ejecutamos el login automáticamente
+        if (dniParam && llaveParam) {
+            // Un pequeño delay de 500ms para que el usuario vea que se están completando los campos
+            // y no sienta que "pasó algo raro"
+            const timer = setTimeout(() => {
+                ejecutarLogin(dniParam, llaveParam);
+            }, 2000);
+            return () => clearTimeout(timer);
         }
     }, []);
 
-    const handleLogin = async () => {
-        if (!dni || !llave) {
-            setError('Por favor completa todos los campos');
+    // 2. Refactorizamos la lógica de login para que pueda recibir parámetros directos o del estado
+    const ejecutarLogin = async (dniLog, llaveLog) => {
+        const d = dniLog || dni;
+        const l = llaveLog || llave;
+
+        if (!d || !l) {
+            setError('Faltan datos para ingresar');
             return;
         }
 
@@ -48,42 +63,37 @@ const LoginScreen = ({ onLogin }) => {
         setError('');
 
         try {
-            const acampanteRef = doc(db, 'acampantes', dni);
+            const acampanteRef = doc(db, 'acampantes', d);
             const acampanteSnap = await getDoc(acampanteRef);
 
-            if (!acampanteSnap.exists()) {
-                setError('DNI no encontrado. Verifica tu número de documento.');
+            if (!acampanteSnap.exists() || acampanteSnap.data().llave !== l) {
+                setError('Credenciales incorrectas. Verificá el link o tus datos.');
                 setLoading(false);
                 return;
             }
 
             const acampanteData = acampanteSnap.data();
 
-            if (acampanteData.llave !== llave) {
-                setError('Llave de acceso incorrecta. Intenta nuevamente.');
-                setLoading(false);
-                return;
-            }
+            // 3. LIMPIEZA DE URL: Borramos los parámetros antes de pasar a la siguiente pantalla
+            // Esto evita que si el usuario refresca, se vuelva a intentar loguear con datos viejos
+            const nuevaUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, nuevaUrl);
 
             localStorage.setItem('aviva_session', JSON.stringify({
-                dni: dni,
+                dni: d,
                 nombre: acampanteData.nombre,
                 timestamp: Date.now()
             }));
 
-            onLogin(dni);
+            onLogin(d);
         } catch (error) {
             console.error('Error en login:', error);
-            setError('Error de conexión. Intenta nuevamente.');
+            setError('Error de conexión.');
             setLoading(false);
         }
     };
 
-    const handleKeyPress = (e) => {
-        if (e.key === 'Enter') {
-            handleLogin();
-        }
-    };
+    // ... el resto de tu return y el botón ahora llamaría a ejecutarLogin()
 
     return (
         <div className="min-h-screen bg-white flex items-center justify-center p-6">
@@ -150,7 +160,7 @@ const LoginScreen = ({ onLogin }) => {
                         )}
 
                         <button
-                            onClick={handleLogin}
+                            onClick={ejecutarLogin()}
                             disabled={loading}
                             className="w-full py-4 bg-gradient-to-r from-[#008080] to-[#00A86B] text-white rounded-2xl font-black text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             style={{ boxShadow: '0 4px 20px -2px rgba(0, 128, 128, 0.3)' }}
