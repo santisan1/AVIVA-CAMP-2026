@@ -7,17 +7,17 @@ import {
   RefreshCw, Download, AlertTriangle, Menu,
   Plus, ChevronLeft, ChevronRight  // <-- Añade estos
 } from 'lucide-react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+
 import { Html5Qrcode } from 'html5-qrcode';
 
 // Firebase Configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyAwgJfdmLIYklZULlyx1VMeJW7ul_Nmcrs",
-  authDomain: "aviva-camp-2026.firebaseapp.com",
-  projectId: "aviva-camp-2026",
-  storageBucket: "aviva-camp-2026.firebasestorage.app",
-  messagingSenderId: "564202054034",
-  appId: "1:564202054034:web:5c7584214c1e1276b5214b"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);
