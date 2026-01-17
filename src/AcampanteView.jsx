@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 import {
-    getFirestore, doc, getDoc, collection, query, where, getDocs, collection, updateDoc,
+    getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc,
     serverTimestamp, onSnapshot
 } from 'firebase/firestore';
 import { Home, MapPin, Users, Calendar, Phone, Bell, LogOut, Lock, Loader2, AlertCircle } from 'lucide-react';
