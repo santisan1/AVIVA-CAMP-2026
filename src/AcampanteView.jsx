@@ -233,6 +233,19 @@ const cargarAgenda = async (acampanteData, grupoData, setAgendaHoy, diaActual) =
 
     setAgendaHoy(agenda);
 };
+const cargarAgendaCompleta = async (acampanteData, grupoData, setAgendaCompleta) => {
+    const snap = await getDocs(collection(db, 'agenda'));
+
+    const agenda = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => {
+            if (a.dia !== b.dia) return a.dia - b.dia;
+            return a.orden - b.orden;
+        })
+        .map(act => interpretarActividad(act, acampanteData, grupoData));
+
+    setAgendaCompleta(agenda);
+};
 
 
 // Componente Principal de Vista del Acampante
@@ -241,9 +254,10 @@ const AcampanteView = ({ dni, onLogout }) => {
     const [grupo, setGrupo] = useState(null);
     const [habitacion, setHabitacion] = useState(null);
     const [agendaHoy, setAgendaHoy] = useState([]);
+    const [agendaCompleta, setAgendaCompleta] = useState([]);
     const [actividadActual, setActividadActual] = useState(null);
     const [loading, setLoading] = useState(true);
-
+    const [activeTab, setActiveTab] = useState('panel'); // panel | agenda
     useEffect(() => {
         loadAcampanteData();
     }, [dni]);
@@ -344,6 +358,7 @@ const AcampanteView = ({ dni, onLogout }) => {
             //setAgendaHoy(agendaSimulada);
             await cargarAgenda(acampanteData, grupoData, setAgendaHoy, diaCampamento);
 
+            await cargarAgendaCompleta(acampanteData, grupoData, setAgendaCompleta);
 
 
             // Determinar actividad actual
@@ -403,6 +418,15 @@ const AcampanteView = ({ dni, onLogout }) => {
             return h1 * 60 + m1 - (h2 * 60 + m2);
         })
         .slice(0, 3);
+    const agruparPorDia = (agenda) => {
+        return agenda.reduce((acc, act) => {
+            if (!acc[act.dia]) acc[act.dia] = [];
+            acc[act.dia].push(act);
+            return acc;
+        }, {});
+    };
+
+    const agendaPorDia = agruparPorDia(agendaCompleta);
 
     return (
         <div className="min-h-screen bg-white pb-32 relative overflow-x-hidden">
@@ -440,6 +464,64 @@ const AcampanteView = ({ dni, onLogout }) => {
 
             <main className="px-5 space-y-6">
                 {/* Tu Estado */}
+                {activeTab === 'agenda' && (
+                    <section className="space-y-6">
+                        {Object.keys(agendaPorDia).map(dia => (
+                            <div key={dia}>
+                                <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 px-1">
+                                    Día {dia}
+                                </h2>
+
+                                <div className="space-y-2">
+                                    {agendaPorDia[dia].map((actividad, idx) => {
+                                        const [h, m] = actividad.hora.split(':').map(Number);
+                                        const inicio = h * 60 + m;
+                                        const fin = inicio + (actividad.duracion || 0);
+                                        const enCurso =
+                                            dia === Math.floor(
+                                                (new Date() - FECHA_INICIO_CAMPAMENTO) /
+                                                (1000 * 60 * 60 * 24)
+                                            ) + 1 &&
+                                            minutosAhoraRender >= inicio &&
+                                            minutosAhoraRender < fin;
+
+                                        return (
+                                            <div
+                                                key={idx}
+                                                className={`flex items-center gap-4 p-4 rounded-2xl border 
+                                ${enCurso
+                                                        ? 'border-[#008080] bg-[#F0F9F9]'
+                                                        : 'border-slate-100 bg-white'
+                                                    }`}
+                                            >
+                                                <div className="w-10 h-10 rounded-xl bg-[#F0F9F9] flex items-center justify-center text-[#008080]">
+                                                    <span className="text-2xl">{actividad.icon}</span>
+                                                </div>
+
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-bold text-[#001B3D] flex items-center gap-2">
+                                                        {actividad.titulo}
+                                                        {enCurso && (
+                                                            <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#008080] text-white font-black uppercase">
+                                                                En curso
+                                                            </span>
+                                                        )}
+                                                    </p>
+                                                    <p className="text-[11px] text-slate-500">{actividad.ubicacion}</p>
+                                                </div>
+
+                                                <div className="text-right">
+                                                    <p className="text-xs font-bold text-slate-400">{actividad.hora}</p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </section>
+                )}
+
                 <section>
                     <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 px-1">Tu Estado</h2>
                     <div className="grid grid-cols-2 gap-3">
@@ -563,13 +645,32 @@ const AcampanteView = ({ dni, onLogout }) => {
 
             {/* Navegación inferior */}
             <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-slate-100 px-6 pt-4 pb-8 flex justify-between items-center z-40">
-                <button className="flex flex-col items-center gap-1 text-[#00A86B] bg-[#E6F6F0] border-[1.5px] border-[#00A86B] rounded-xl px-3 py-1">
-                    <Home className="w-6 h-6" style={{ fill: 'currentColor' }} />
-                    <span className="text-[9px] font-bold uppercase tracking-tighter">Panel</span>
+                <button
+                    onClick={() => setActiveTab('panel')}
+                    className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl border-[1.5px] transition-all
+    ${activeTab === 'panel'
+                            ? 'text-[#00A86B] bg-[#E6F6F0] border-[#00A86B]'
+                            : 'text-[#001B3D]/60 border-transparent hover:text-[#001B3D]'
+                        }`}
+                >
+                    <Home
+                        className="w-6 h-6"
+                        style={{ fill: activeTab === 'panel' ? 'currentColor' : 'none' }}
+                    />
+                    <span className="text-[9px] font-bold uppercase tracking-tighter">
+                        Panel
+                    </span>
                 </button>
-                <button className="flex flex-col items-center gap-1 text-[#001B3D]/60 px-3 hover:text-[#001B3D] transition-colors">
-                    <Calendar className="w-6 h-6" />
-                    <span className="text-[9px] font-bold uppercase tracking-tighter">Agenda</span>
+
+                <button
+                    onClick={() => setActiveTab('agenda')}
+                    className={`flex flex-col items-center gap-1 px-3 transition-colors
+                      ${activeTab === 'agenda'
+                            ? 'text-[#00A86B] bg-[#E6F6F0] border-[1.5px] border-[#00A86B] rounded-xl'
+                            : 'text-[#001B3D]/60 hover:text-[#001B3D]'
+                        }`}
+                >
+
                 </button>
                 <button className="flex flex-col items-center gap-1 text-[#001B3D]/60 px-3 hover:text-[#001B3D] transition-colors">
                     <Users className="w-6 h-6" />
