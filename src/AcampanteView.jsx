@@ -1,22 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { Home, MapPin, Users, Calendar, Phone, Bell, LogOut, Lock, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Home, MapPin, Users, Calendar, Phone, Bell, LogOut, Lock, Loader2, AlertCircle } from 'lucide-react';
 
 // Firebase Configuration (reemplazar con tus credenciales reales)
 const firebaseConfig = {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID
+    apiKey: "AIzaSyDfake-key-replace-with-real",
+    authDomain: "aviva-camp.firebaseapp.com",
+    projectId: "aviva-camp-2026",
+    storageBucket: "aviva-camp.appspot.com",
+    messagingSenderId: "123456789",
+    appId: "1:123456789:web:abcdef"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// Componente de Login
 // Componente de Login
 const LoginScreen = ({ onLogin }) => {
     const [dni, setDni] = useState('');
@@ -43,7 +42,6 @@ const LoginScreen = ({ onLogin }) => {
         setError('');
 
         try {
-            // Buscar acampante por DNI
             const acampanteRef = doc(db, 'acampantes', dni);
             const acampanteSnap = await getDoc(acampanteRef);
 
@@ -55,21 +53,18 @@ const LoginScreen = ({ onLogin }) => {
 
             const acampanteData = acampanteSnap.data();
 
-            // Validar llave
             if (acampanteData.llave !== llave) {
                 setError('Llave de acceso incorrecta. Intenta nuevamente.');
                 setLoading(false);
                 return;
             }
 
-            // Guardar sesión
             localStorage.setItem('aviva_session', JSON.stringify({
                 dni: dni,
                 nombre: acampanteData.nombre,
                 timestamp: Date.now()
             }));
 
-            // Login exitoso
             onLogin(dni);
         } catch (error) {
             console.error('Error en login:', error);
@@ -85,33 +80,30 @@ const LoginScreen = ({ onLogin }) => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-teal-50 via-emerald-50 to-white flex items-center justify-center p-6">
+        <div className="min-h-screen bg-white flex items-center justify-center p-6">
             <div className="w-full max-w-md">
-                {/* Logo y Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-[#008080] to-[#00A86B] rounded-3xl mb-4 shadow-2xl shadow-teal-500/30">
+                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-[#008080] to-[#00A86B] rounded-3xl mb-4 shadow-2xl" style={{ boxShadow: '0 4px 20px -2px rgba(0, 128, 128, 0.3)' }}>
                         <span className="text-4xl">⛰️</span>
                     </div>
-                    <h1 className="text-4xl font-black text-slate-900 mb-2">AVIVA CAMP 2026</h1>
+                    <h1 className="text-4xl font-black text-[#001B3D] mb-2">AVIVA CAMP 2026</h1>
                     <p className="text-slate-600 font-semibold">Bienvenido, Acampante</p>
                 </div>
 
-                {/* Card de Login */}
-                <div className="bg-white rounded-3xl p-8 border-2 border-slate-200 shadow-2xl">
+                <div className="bg-white rounded-3xl p-8 border-2 border-slate-100 shadow-xl" style={{ boxShadow: '0 4px 20px -2px rgba(0, 27, 61, 0.05)' }}>
                     <div className="flex items-center gap-3 mb-6">
-                        <div className="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center border-2 border-[#008080]">
+                        <div className="w-12 h-12 bg-[#F0F9F9] rounded-2xl flex items-center justify-center border border-[#008080]/20">
                             <Lock className="w-6 h-6 text-[#008080]" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-black text-slate-900">Ingreso Seguro</h2>
-                            <p className="text-sm text-slate-600">Ingresa tus credenciales</p>
+                            <h2 className="text-xl font-black text-[#001B3D]">Ingreso Seguro</h2>
+                            <p className="text-sm text-slate-500">Ingresa tus credenciales</p>
                         </div>
                     </div>
 
                     <div className="space-y-5">
-                        {/* DNI Input */}
                         <div>
-                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                                 Número de DNI
                             </label>
                             <input
@@ -120,19 +112,18 @@ const LoginScreen = ({ onLogin }) => {
                                 onChange={(e) => setDni(e.target.value)}
                                 onKeyPress={handleKeyPress}
                                 placeholder="12345678"
-                                className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#008080] focus:bg-white font-bold text-lg transition-all"
+                                className="w-full px-4 py-4 bg-[#F8FAFB] border border-slate-100 rounded-2xl text-[#001B3D] placeholder:text-slate-400 focus:outline-none focus:border-[#008080] focus:bg-white font-bold text-lg transition-all"
                             />
                             {dni && (
-                                <p className="text-xs text-teal-600 font-semibold mt-2 flex items-center gap-1">
+                                <p className="text-xs text-[#00A86B] font-semibold mt-2 flex items-center gap-1">
                                     <CheckCircle className="w-3 h-3" />
                                     DNI detectado automáticamente
                                 </p>
                             )}
                         </div>
 
-                        {/* Llave Input */}
                         <div>
-                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                                 Llave de Acceso Personal
                             </label>
                             <input
@@ -141,23 +132,22 @@ const LoginScreen = ({ onLogin }) => {
                                 onChange={(e) => setLlave(e.target.value)}
                                 onKeyPress={handleKeyPress}
                                 placeholder="Tu llave secreta"
-                                className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00A86B] focus:bg-white font-bold text-lg transition-all"
+                                className="w-full px-4 py-4 bg-[#F8FAFB] border border-slate-100 rounded-2xl text-[#001B3D] placeholder:text-slate-400 focus:outline-none focus:border-[#00A86B] focus:bg-white font-bold text-lg transition-all"
                             />
                         </div>
 
-                        {/* Error Message */}
                         {error && (
-                            <div className="flex items-center gap-3 p-4 bg-red-50 border-2 border-red-200 rounded-2xl">
+                            <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl">
                                 <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
                                 <p className="text-sm text-red-700 font-semibold">{error}</p>
                             </div>
                         )}
 
-                        {/* Submit Button */}
                         <button
                             onClick={handleLogin}
                             disabled={loading}
-                            className="w-full py-4 bg-gradient-to-r from-[#008080] to-[#00A86B] text-white rounded-2xl font-black text-lg shadow-lg shadow-teal-500/30 hover:shadow-teal-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            className="w-full py-4 bg-gradient-to-r from-[#008080] to-[#00A86B] text-white rounded-2xl font-black text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            style={{ boxShadow: '0 4px 20px -2px rgba(0, 128, 128, 0.3)' }}
                         >
                             {loading ? (
                                 <>
@@ -173,9 +163,8 @@ const LoginScreen = ({ onLogin }) => {
                         </button>
                     </div>
 
-                    {/* Footer Info */}
-                    <div className="mt-6 pt-6 border-t-2 border-slate-100">
-                        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-3">
+                    <div className="mt-6 pt-6 border-t border-slate-100">
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
                             <p className="text-xs text-blue-800 font-semibold text-center flex items-center justify-center gap-2">
                                 <AlertCircle className="w-4 h-4" />
                                 ¿Olvidaste tu llave? Contacta a tu líder de grupo
@@ -184,7 +173,6 @@ const LoginScreen = ({ onLogin }) => {
                     </div>
                 </div>
 
-                {/* Link para compartir */}
                 {!dni && (
                     <div className="mt-6 text-center">
                         <p className="text-sm text-slate-600">
@@ -285,10 +273,10 @@ const AcampanteView = ({ dni, onLogout }) => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-whiteflex items-center justify-center">
+            <div className="min-h-screen bg-black flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 className="w-16 h-16 text-orange-500 animate-spin mx-auto mb-4" />
-                    <p className="text-slate-900 font-bold text-lg">Cargando tu información...</p>
+                    <p className="text-white font-bold text-lg">Cargando tu información...</p>
                 </div>
             </div>
         );
@@ -296,13 +284,13 @@ const AcampanteView = ({ dni, onLogout }) => {
 
     if (!acampante) {
         return (
-            <div className="min-h-screen bg-whiteflex items-center justify-center p-6">
+            <div className="min-h-screen bg-black flex items-center justify-center p-6">
                 <div className="text-center">
                     <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-                    <p className="text-slate-900 font-bold text-lg">Error al cargar datos</p>
+                    <p className="text-white font-bold text-lg">Error al cargar datos</p>
                     <button
                         onClick={onLogout}
-                        className="mt-4 px-6 py-3  bg-slate-100 text-slate-900 rounded-xl font-bold"
+                        className="mt-4 px-6 py-3 bg-zinc-800 text-white rounded-xl font-bold"
                     >
                         Volver al inicio
                     </button>
@@ -312,32 +300,32 @@ const AcampanteView = ({ dni, onLogout }) => {
     }
 
     return (
-        <div className="min-h-screen bg-whitepb-32">
+        <div className="min-h-screen bg-white pb-32 relative overflow-x-hidden">
             {/* Header */}
-            <header className="px-6 pt-12 pb-6 sticky top-0 bg-black/95 backdrop-blur-md z-30 border-b border-zinc-900">
+            <header className="px-6 pt-12 pb-6 sticky top-0 bg-white/95 backdrop-blur-md z-30">
                 <div className="flex items-center justify-between">
                     <div className="space-y-1">
                         <div className="flex items-center gap-2">
                             <span className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 ${acampante.presente
-                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                : ' bg-slate-100 text-slate-700 border border-slate-300'
+                                ? 'bg-[#E6F6F0] text-[#00A86B] border border-[#D1EFDE]'
+                                : 'bg-slate-100 text-slate-500 border border-slate-200'
                                 }`}>
-                                <span className={`flex h-1.5 w-1.5 rounded-full ${acampante.presente ? 'bg-green-400' : 'bg-zinc-500'}`}></span>
+                                <span className={`flex h-1.5 w-1.5 rounded-full ${acampante.presente ? 'bg-[#00A86B]' : 'bg-slate-400'}`}></span>
                                 {acampante.presente ? 'PRESENTE' : 'PENDIENTE'}
                             </span>
                         </div>
-                        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
+                        <h1 className="text-2xl font-extrabold tracking-tight text-[#001B3D]">
                             ¡Hola, {acampante.nombre.split(' ')[0]}!
                         </h1>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button className="w-11 h-11 rounded-full bg-teal-50 flex items-center justify-center text-slate-900 border border-slate-200 relative">
+                        <button className="w-11 h-11 rounded-full bg-slate-50 flex items-center justify-center text-[#001B3D] border border-slate-100 relative">
                             <Bell className="w-5 h-5" />
-                            <span className="absolute top-2.5 right-2.5 w-2 h-2 from-teal-500 rounded-full border-2 border-black"></span>
+                            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-[#008080] rounded-full border-2 border-white"></span>
                         </button>
                         <button
                             onClick={onLogout}
-                            className="w-11 h-11 rounded-full bg-teal-50 flex items-center justify-center text-slate-900 border border-slate-200 hover: bg-slate-100 transition-colors"
+                            className="w-11 h-11 rounded-full bg-slate-50 flex items-center justify-center text-[#001B3D] border border-slate-100 hover:bg-slate-100 transition-colors"
                         >
                             <LogOut className="w-5 h-5" />
                         </button>
@@ -348,30 +336,33 @@ const AcampanteView = ({ dni, onLogout }) => {
             <main className="px-5 space-y-6">
                 {/* Tu Estado */}
                 <section>
-                    <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-700 mb-3 px-1">Tu Estado</h2>
+                    <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 px-1">Tu Estado</h2>
                     <div className="grid grid-cols-2 gap-3">
                         {/* Ubicación */}
-                        <div className="bg-teal-50 p-4 rounded-2xl flex flex-col aspect-square justify-between border border-slate-200">
-                            <MapPin className="w-6 h-6 text-slate-900" />
+                        <div className="bg-[#F8FAFB] p-4 rounded-2xl flex flex-col aspect-square justify-between border border-slate-100">
+                            <MapPin className="w-6 h-6 text-[#001B3D]" />
                             <div>
-                                <p className="text-[10px] font-bold text-slate-700 uppercase">Ubicación</p>
-                                <p className="text-lg font-bold text-slate-900">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase">Ubicación</p>
+                                <p className="text-lg font-bold text-[#001B3D]">
                                     {habitacion ? `${habitacion.tipo} ${habitacion.numero}` : acampante.habitacion || 'Sin asignar'}
                                 </p>
                                 {habitacion && (
-                                    <p className="text-xs text-slate-700 mt-1">Piso {habitacion.piso}</p>
+                                    <p className="text-xs text-slate-500 mt-1">Piso {habitacion.piso}</p>
                                 )}
                             </div>
                         </div>
 
                         {/* Equipo (con color del grupo) */}
                         <div
-                            className="p-4 rounded-2xl flex flex-col aspect-square justify-between text-slate-900 shadow-lg"
-                            style={{ backgroundColor: grupo?.color || '#f97316' }}
+                            className="p-4 rounded-2xl flex flex-col aspect-square justify-between text-white shadow-lg"
+                            style={{
+                                backgroundColor: grupo?.color || '#008080',
+                                boxShadow: '0 4px 20px -2px rgba(0, 128, 128, 0.1)'
+                            }}
                         >
-                            <Users className="w-6 h-6 text-slate-900" style={{ fill: 'currentColor' }} />
+                            <Users className="w-6 h-6 text-white" style={{ fill: 'currentColor' }} />
                             <div>
-                                <p className="text-[10px] font-black text-slate-900/70 uppercase tracking-tighter">Equipo</p>
+                                <p className="text-[10px] font-black text-white/70 uppercase tracking-tighter">Equipo</p>
                                 <p className="text-lg font-extrabold leading-tight">
                                     {grupo?.nombre || 'Sin grupo'}
                                 </p>
@@ -383,24 +374,24 @@ const AcampanteView = ({ dni, onLogout }) => {
                 {/* Actividad En Curso */}
                 {actividadActual && (
                     <section>
-                        <div className="bg-teal-50 p-5 rounded-3xl border-2 border-orange-500/20 relative overflow-hidden">
+                        <div className="bg-white p-5 rounded-3xl border-2 border-[#008080]/20 relative overflow-hidden" style={{ boxShadow: '0 4px 20px -2px rgba(0, 27, 61, 0.05)' }}>
                             <div className="flex justify-between items-start mb-4">
                                 <div className="space-y-0.5">
-                                    <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">En Curso</span>
-                                    <h3 className="text-xl font-extrabold text-slate-900">{actividadActual.titulo}</h3>
-                                    <p className="text-slate-600 text-sm flex items-center gap-1">
+                                    <span className="text-[10px] font-black text-[#008080] uppercase tracking-widest">En Curso</span>
+                                    <h3 className="text-xl font-extrabold text-[#001B3D]">{actividadActual.titulo}</h3>
+                                    <p className="text-slate-500 text-sm flex items-center gap-1">
                                         <MapPin className="w-4 h-4" />
                                         {actividadActual.ubicacion}
                                     </p>
                                 </div>
-                                <div className=" bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-300">
-                                    <p className="text-[10px] font-bold text-slate-600 uppercase text-center leading-none mb-0.5">Faltan</p>
-                                    <p className="text-sm font-black text-orange-500 text-center">{actividadActual.faltanMinutos}m</p>
+                                <div className="bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase text-center leading-none mb-0.5">Faltan</p>
+                                    <p className="text-sm font-black text-[#008080] text-center">{actividadActual.faltanMinutos}m</p>
                                 </div>
                             </div>
-                            <div className="w-full  bg-slate-100 h-2 rounded-full overflow-hidden">
+                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                                 <div
-                                    className="h-full from-teal-500 rounded-full transition-all"
+                                    className="h-full bg-[#008080] rounded-full transition-all"
                                     style={{ width: `${actividadActual.progreso}%` }}
                                 ></div>
                             </div>
@@ -411,21 +402,21 @@ const AcampanteView = ({ dni, onLogout }) => {
                 {/* Próximamente */}
                 <section>
                     <div className="flex items-center justify-between mb-3 px-1">
-                        <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-700">Próximamente</h2>
-                        <span className="text-[10px] font-bold text-slate-700">Hoy</span>
+                        <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Próximamente</h2>
+                        <span className="text-[10px] font-bold text-slate-400">Hoy</span>
                     </div>
                     <div className="space-y-2">
                         {agendaHoy.slice(0, 3).map((actividad, idx) => (
-                            <div key={idx} className="flex items-center gap-4 p-4 bg-teal-50 rounded-2xl border border-slate-200">
-                                <div className="w-10 h-10 rounded-xl  bg-slate-100 flex items-center justify-center text-2xl">
-                                    {actividad.icon}
+                            <div key={idx} className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100" style={{ boxShadow: '0 4px 20px -2px rgba(0, 27, 61, 0.05)' }}>
+                                <div className="w-10 h-10 rounded-xl bg-[#F0F9F9] flex items-center justify-center text-[#008080]">
+                                    <span className="text-2xl">{actividad.icon}</span>
                                 </div>
                                 <div className="flex-1">
-                                    <p className="text-sm font-bold text-slate-900">{actividad.titulo}</p>
-                                    <p className="text-[11px] text-slate-700">{actividad.ubicacion}</p>
+                                    <p className="text-sm font-bold text-[#001B3D]">{actividad.titulo}</p>
+                                    <p className="text-[11px] text-slate-500">{actividad.ubicacion}</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-xs font-bold text-slate-600">{actividad.hora}</p>
+                                    <p className="text-xs font-bold text-slate-400">{actividad.hora}</p>
                                 </div>
                             </div>
                         ))}
@@ -435,13 +426,13 @@ const AcampanteView = ({ dni, onLogout }) => {
                 {/* Aviso de Dieta (si aplica) */}
                 {acampante.dieta && acampante.dieta !== 'Ninguna' && (
                     <section>
-                        <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
+                        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
                             <div className="flex items-start gap-3">
-                                <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                                <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                                 <div>
-                                    <p className="text-sm font-bold text-blue-400">Recordatorio de Dieta</p>
-                                    <p className="text-xs text-slate-600 mt-1">
-                                        Tu dieta registrada: <span className="font-bold text-slate-900">{acampante.dieta}</span>
+                                    <p className="text-sm font-bold text-blue-900">Recordatorio de Dieta</p>
+                                    <p className="text-xs text-blue-700 mt-1">
+                                        Tu dieta registrada: <span className="font-bold">{acampante.dieta}</span>
                                     </p>
                                 </div>
                             </div>
@@ -457,7 +448,7 @@ const AcampanteView = ({ dni, onLogout }) => {
                         href={`https://wa.me/${grupo.telefono_lider.replace(/\D/g, '')}?text=Hola, soy ${acampante.nombre} del ${grupo.nombre}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center justify-center w-14 h-14 bg-[#25D366] text-slate-900 rounded-full shadow-2xl shadow-green-500/20 hover:scale-110 transition-transform"
+                        className="flex items-center justify-center w-14 h-14 bg-[#25D366] text-white rounded-full shadow-lg active:scale-95 transition-transform"
                     >
                         <Phone className="w-7 h-7" />
                     </a>
@@ -465,22 +456,22 @@ const AcampanteView = ({ dni, onLogout }) => {
             )}
 
             {/* Navegación inferior */}
-            <nav className="fixed bottom-0 left-0 right-0 bg-teal-50/95 backdrop-blur-xl border-t border-slate-200 px-6 pt-4 pb-8 flex justify-between items-center z-40">
-                <button className="flex flex-col items-center gap-1 text-orange-500 from-teal-500/10 border border-orange-500/20 rounded-2xl px-4 py-2">
+            <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-slate-100 px-6 pt-4 pb-8 flex justify-between items-center z-40">
+                <button className="flex flex-col items-center gap-1 text-[#00A86B] bg-[#E6F6F0] border-[1.5px] border-[#00A86B] rounded-xl px-3 py-1">
                     <Home className="w-6 h-6" style={{ fill: 'currentColor' }} />
                     <span className="text-[9px] font-bold uppercase tracking-tighter">Panel</span>
                 </button>
-                <button className="flex flex-col items-center gap-1 text-slate-700 px-3 hover:text-zinc-300 transition-colors">
+                <button className="flex flex-col items-center gap-1 text-[#001B3D]/60 px-3 hover:text-[#001B3D] transition-colors">
                     <Calendar className="w-6 h-6" />
                     <span className="text-[9px] font-bold uppercase tracking-tighter">Agenda</span>
                 </button>
-                <button className="flex flex-col items-center gap-1 text-slate-700 px-3 hover:text-zinc-300 transition-colors">
+                <button className="flex flex-col items-center gap-1 text-[#001B3D]/60 px-3 hover:text-[#001B3D] transition-colors">
                     <Users className="w-6 h-6" />
                     <span className="text-[9px] font-bold uppercase tracking-tighter">Grupo</span>
                 </button>
-                <button className="flex flex-col items-center gap-1 text-slate-700 px-3 hover:text-zinc-300 transition-colors">
-                    <MapPin className="w-6 h-6" />
-                    <span className="text-[9px] font-bold uppercase tracking-tighter">Mapa</span>
+                <button className="flex flex-col items-center gap-1 text-[#001B3D]/60 px-3 hover:text-[#001B3D] transition-colors">
+                    <User className="w-6 h-6" />
+                    <span className="text-[9px] font-bold uppercase tracking-tighter">Perfil</span>
                 </button>
             </nav>
         </div>
