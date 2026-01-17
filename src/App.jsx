@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import {
   Home, QrCode, Building2, Search, Calendar, User, Phone, AlertCircle,
   Clock, Users, UserCheck, UserX, Package, Award, X, Bell, CheckCircle,
@@ -581,7 +581,45 @@ const Dashboard = ({ acampantes }) => {
           </div>
         </div>
       </div>
+      {/* Gráfico de check-ins por hora */}
+      <div className="bg-white rounded-3xl p-8 border-2 border-slate-200 shadow-lg">
+        <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">
+          Check-ins por Hora
+        </h3>
+        <div className="h-64 flex items-end justify-around gap-2">
+          {Array.from({ length: 12 }, (_, i) => {
+            const hora = i + 8; // De 8:00 a 19:00
+            const checkInsEnHora = acampantes.filter(a => {
+              if (!a.hora_ingreso?.seconds) return false;
+              const horaIngreso = new Date(a.hora_ingreso.seconds * 1000).getHours();
+              return horaIngreso === hora;
+            }).length;
 
+            const maxCheckIns = Math.max(...Array.from({ length: 12 }, (_, j) => {
+              const h = j + 8;
+              return acampantes.filter(a => {
+                if (!a.hora_ingreso?.seconds) return false;
+                return new Date(a.hora_ingreso.seconds * 1000).getHours() === h;
+              }).length;
+            }), 1);
+
+            const altura = (checkInsEnHora / maxCheckIns) * 100;
+
+            return (
+              <div key={i} className="flex flex-col items-center gap-2 flex-1">
+                <div className="relative w-full bg-slate-100 rounded-t-lg overflow-hidden" style={{ height: '200px' }}>
+                  <div
+                    className="absolute bottom-0 w-full bg-gradient-to-t from-emerald-600 to-emerald-400 rounded-t-lg transition-all duration-500"
+                    style={{ height: `${altura}%` }}
+                  />
+                </div>
+                <span className="text-xs font-bold text-slate-600">{hora}h</span>
+                <span className="text-xs text-slate-400">{checkInsEnHora}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
       <div className="bg-white rounded-3xl p-6 border-2 border-slate-200 shadow-lg">
         <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Últimos Check-ins</h3>
         <div className="space-y-3">
@@ -1543,6 +1581,16 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
                 Crear WhatsApp
               </button>
               <button
+                onClick={() => {
+                  const mensaje = prompt('Escribe el mensaje para el grupo:');
+                  if (mensaje) enviarNotificacionGrupo(grupo.id, mensaje);
+                }}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg"
+              >
+                <Bell className="w-5 h-5" />
+                Notificar Grupo
+              </button>
+              <button
                 onClick={onBack}
                 className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold flex items-center gap-2"
               >
@@ -1844,13 +1892,7 @@ const GruposView = ({ acampantes, onSelectAcampante, setNotification }) => {
             </p>
           </div>
           <div className="flex gap-3">
-            <button
-              onClick={sincronizarMiembros}
-              className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
-            >
-              <RefreshCw className="w-5 h-5" />
-              Sincronizar Miembros
-            </button>
+
             <button
               onClick={() => setViewMode('lider')}
               className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center gap-2"
@@ -2374,25 +2416,31 @@ export default function AvivaApp() {
     }
   };
 
+  useEffect(() => {
+    // Listener en tiempo real para acampantes
+    const unsubscribeAcampantes = onSnapshot(
+      collection(db, 'acampantes'),
+      (snapshot) => {
+        const data = snapshot.docs.map(doc => ({
+          ...doc.data(),
+          id: doc.id
+        }));
+        setAcampantes(data);
+        setLoading(false);
+        setLastSync(new Date());
+      },
+      (error) => {
+        console.error('Error en listener:', error);
+        setNotification({
+          type: 'error',
+          message: 'Error al sincronizar datos en tiempo real'
+        });
+        setLoading(false);
+      }
+    );
 
-  const loadAcampantes = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, 'acampantes'));
-      const data = querySnapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id
-      }));
-      setAcampantes(data);
-    } catch (error) {
-      console.error('Error cargando acampantes:', error);
-      setNotification({
-        type: 'error',
-        message: 'Error al cargar datos. Verifica tu conexión.'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => unsubscribeAcampantes();
+  }, []);
 
   const handleForceRefresh = async () => {
     setIsSyncing(true);
@@ -2528,25 +2576,7 @@ export default function AvivaApp() {
             </h1>
             <p className="text-slate-600 font-semibold text-sm mt-1">Recepción y Control</p>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleForceRefresh}
-              disabled={isSyncing}
-              className="flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSyncing ? (
-                <RefreshCw className="w-5 h-5 animate-spin" strokeWidth={2.5} />
-              ) : (
-                <Download className="w-5 h-5" strokeWidth={2.5} />
-              )}
-              {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
-            </button>
-            {lastSync && (
-              <span className="text-xs text-slate-500 font-semibold">
-                Últ. sync: {lastSync.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            )}
-          </div>
+
         </div>
       </header>
 
